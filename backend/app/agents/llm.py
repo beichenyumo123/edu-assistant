@@ -91,19 +91,45 @@ class LocalDemoLLM:
         source = _extract_between(prompt, "原文内容：")
         sentences = _sentence_split(source)
         points = []
-        for index, sentence in enumerate(sentences[:6], 1):
+        for index, sentence in enumerate(sentences[:8], 1):
             title = re.sub(r"[：:，,。！？!?\s].*$", "", sentence).strip()[:18]
             if len(title) < 4:
                 title = f"知识点{index}"
+            examples = re.findall(r'"([^"]{6,120})"', sentence)
             points.append(
                 {
+                    "category": self._knowledge_category(sentence),
                     "title": title,
                     "description": sentence[:120],
+                    "key_points": [sentence[:120]],
+                    "examples": examples[:3],
+                    "source_excerpt": sentence[:180],
                 }
             )
         if not points:
-            points = [{"title": "文档主题", "description": "当前文档内容较短，可继续上传更完整资料后再提取。"}]
+            points = [
+                {
+                    "category": "核心知识点",
+                    "title": "文档主题",
+                    "description": "当前文档内容较短，可继续上传更完整资料后再提取。",
+                    "key_points": [],
+                    "examples": [],
+                    "source_excerpt": "",
+                }
+            ]
         return json.dumps(points, ensure_ascii=False)
+
+    def _knowledge_category(self, sentence: str) -> str:
+        text = sentence.lower()
+        if any(keyword in text for keyword in ("开头", "论证", "转折", "观点", "建议", "结尾", "hook", "analysis", "contrast")):
+            return "文章结构"
+        if any(keyword in text for keyword in ("倒装", "虚拟", "强调句", "句式", "从句", "非谓语", "only", "not only")):
+            return "句式升级"
+        if any(keyword in text for keyword in ("同义词", "词汇", "替换", "vocabulary", "good", "bad", "important", "think")):
+            return "词汇表达"
+        if any(keyword in text for keyword in ("连接词", "逻辑", "therefore", "moreover", "nevertheless", "hence")):
+            return "逻辑衔接"
+        return "核心知识点"
 
     def _answer(self, prompt: str) -> str:
         context = _extract_between(prompt, "参考资料：", "用户问题：")

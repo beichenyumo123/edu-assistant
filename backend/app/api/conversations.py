@@ -61,6 +61,13 @@ def get_conversation(
                 d["sources"] = []
         else:
             d["sources"] = []
+        if m.agent_steps and m.role == "assistant":
+            try:
+                d["agent_steps"] = json.loads(m.agent_steps)
+            except Exception:
+                d["agent_steps"] = []
+        else:
+            d["agent_steps"] = []
         msg_list.append(d)
 
     return {"conversation": conv.to_dict(), "messages": msg_list}

@@ -1,29 +1,66 @@
-# Python
+# ===== Python =====
 __pycache__/
 *.py[cod]
+*.so
+*.egg
 *.egg-info/
 dist/
 build/
+.eggs/
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
 .venv/
 venv/
-*.db
+env/
+.env.local
+.env.*.local
 
-# 环境变量
+# ===== Environment =====
 .env
 
-# 上传文件
+# ===== Database =====
+*.db
+*.sqlite
+*.sqlite3
+
+# ===== Uploads (keep directory, ignore contents) =====
 backend/uploads/*
 !backend/uploads/.gitkeep
 
-# ChromaDB
+# ===== Vector store =====
 backend/chroma_db/
 
-# Node
-node_modules/
-dist/
+# ===== Testing & Coverage =====
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.dmypy.json
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
 
-# IDE
+# ===== Node / Frontend =====
+node_modules/
+.vite/
+
+# ===== Logs =====
+*.log
+
+# ===== IDE & Editors =====
 .vscode/
 .idea/
+.cursor/
 *.swp
 *.swo
+*~
+*.code-workspace
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+Desktop.ini

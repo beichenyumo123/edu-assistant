@@ -1,23 +1,19 @@
 """
-轻量知识库存储模块
+ChromaDB 语义向量存储模块
 
-Sprint1 的目标是先跑通“上传资料 -> 分块入库 -> 检索问答”的闭环。
-这里使用本地 JSON 文件实现一个可离线运行的检索存储；后续若需要接入
-ChromaDB，只需要保持 add_texts/similarity_search/delete 这几个方法兼容即可。
+按用户隔离 Collection，提供 add_texts / similarity_search / delete 方法。
+接口与旧 LocalVectorStore 完全兼容，调用方无需改动。
 """
 from __future__ import annotations
 
-import json
-import math
-import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+from langchain_chroma import Chroma
+
 from ..core.config import settings
-
-
-TOKEN_RE = re.compile(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]")
+from .embeddings import get_embeddings
 
 
 @dataclass
@@ -28,100 +24,83 @@ class RetrievedDocument:
     metadata: dict
 
 
-def _tokenize(text: str) -> list[str]:
-    return [token.lower() for token in TOKEN_RE.findall(text or "")]
-
-
-def _score(query_tokens: list[str], content: str) -> float:
-    if not query_tokens or not content:
-        return 0.0
-    content_tokens = _tokenize(content)
-    if not content_tokens:
-        return 0.0
-
-    counts = {}
-    for token in content_tokens:
-        counts[token] = counts.get(token, 0) + 1
-
-    matched = sum(counts.get(token, 0) for token in query_tokens)
-    coverage = len({token for token in query_tokens if token in counts}) / max(1, len(set(query_tokens)))
-    length_penalty = math.log(len(content_tokens) + 10, 10)
-    return matched / length_penalty + coverage * 2
-
-
-class LocalVectorStore:
-    """按用户隔离的本地文本检索库。"""
+class ChromaVectorStore:
+    """按用户隔离的 ChromaDB 语义向量存储。"""
 
     def __init__(self, user_id: int):
         self.user_id = user_id
-        self.base_dir = Path(settings.CHROMA_PERSIST_DIR)
-        self.base_dir.mkdir(parents=True, exist_ok=True)
-        self.path = self.base_dir / f"user_{user_id}_docs.json"
-
-    def _load(self) -> list[dict]:
-        if not self.path.exists():
-            return []
-        try:
-            return json.loads(self.path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            return []
-
-    def _save(self, records: list[dict]) -> None:
-        self.path.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+        self.collection_name = f"user_{user_id}"
+        self.persist_dir = Path(settings.CHROMA_PERSIST_DIR)
+        self.persist_dir.mkdir(parents=True, exist_ok=True)
+        self._embedding_fn = get_embeddings()
+        self._store = Chroma(
+            collection_name=self.collection_name,
+            embedding_function=self._embedding_fn,
+            persist_directory=str(self.persist_dir),
+        )
 
     def add_texts(self, texts: Iterable[str], metadatas: Iterable[dict] | None = None) -> None:
-        records = self._load()
-        metadata_list = list(metadatas or [])
-        for index, text in enumerate(texts):
-            records.append(
-                {
-                    "page_content": text,
-                    "metadata": metadata_list[index] if index < len(metadata_list) else {},
-                }
-            )
-        self._save(records)
+        """添加文本块到向量库，使用确定性 ID 确保幂等。"""
+        texts_list = list(texts)
+        metadata_list = list(metadatas) if metadatas else []
+        if not texts_list:
+            return
+
+        ids = [
+            f"{self.collection_name}_{metadata_list[i].get('document_id', 'unknown')}_{metadata_list[i].get('chunk_index', i)}"
+            if i < len(metadata_list)
+            else f"{self.collection_name}_{i}"
+            for i in range(len(texts_list))
+        ]
+        self._store.add_texts(texts=texts_list, metadatas=metadata_list, ids=ids)
 
     def similarity_search(self, query: str, k: int = 4) -> list[RetrievedDocument]:
-        records = self._load()
-        query_tokens = _tokenize(query)
-        ranked = []
-        for record in records:
-            score = _score(query_tokens, record.get("page_content", ""))
-            if score > 0:
-                ranked.append((score, record))
-
-        if not ranked and records:
-            ranked = [(0.1, record) for record in records[:k]]
-
-        ranked.sort(key=lambda item: item[0], reverse=True)
+        """语义检索，返回最相关的 k 个文档块。"""
+        lc_docs = self._store.similarity_search(query, k=k)
         return [
-            RetrievedDocument(
-                page_content=record.get("page_content", ""),
-                metadata=record.get("metadata", {}),
-            )
-            for _, record in ranked[:k]
+            RetrievedDocument(page_content=doc.page_content, metadata=doc.metadata or {})
+            for doc in lc_docs
+        ]
+
+    def similarity_search_with_score(
+        self, query: str, k: int = 4
+    ) -> list[tuple[RetrievedDocument, float]]:
+        """语义检索，返回带余弦距离的 (文档块, 分数) 列表。
+
+        分数为余弦距离（0 = 完全相同，2 = 完全相反），越小越相关。
+        """
+        lc_results = self._store.similarity_search_with_score(query, k=k)
+        return [
+            (RetrievedDocument(page_content=doc.page_content, metadata=doc.metadata or {}), score)
+            for doc, score in lc_results
         ]
 
     def delete(self, where: dict | None = None) -> None:
-        if not where:
-            self._save([])
-            return
-        records = self._load()
+        """按条件删除文档块。where=None 时清空该用户全部数据。"""
+        if where is None:
+            # 清空集合：取所有 ID 后删除
+            results = self._store.get()
+            if results and results.get("ids"):
+                self._store.delete(ids=results["ids"])
+        else:
+            results = self._store.get(where=where)
+            if results and results.get("ids"):
+                self._store.delete(ids=results["ids"])
 
-        def should_keep(record: dict) -> bool:
-            metadata = record.get("metadata", {})
-            return not all(str(metadata.get(key)) == str(value) for key, value in where.items())
 
-        self._save([record for record in records if should_keep(record)])
-
-
-def get_vectorstore(user_id: int) -> LocalVectorStore:
-    """获取指定用户的本地知识库存储。"""
-    return LocalVectorStore(user_id=user_id)
+def get_vectorstore(user_id: int) -> ChromaVectorStore:
+    """获取指定用户的 ChromaDB 向量存储。"""
+    return ChromaVectorStore(user_id=user_id)
 
 
 def delete_user_collection(user_id: int) -> None:
-    """删除用户的所有知识库数据。"""
-    path = Path(settings.CHROMA_PERSIST_DIR) / f"user_{user_id}_docs.json"
-    if path.exists():
-        path.unlink()
+    """删除用户的所有向量数据（直接移除整个 ChromaDB Collection）。"""
+    import chromadb
+    from chromadb.errors import NotFoundError
+
+    persist_dir = str(Path(settings.CHROMA_PERSIST_DIR))
+    client = chromadb.PersistentClient(path=persist_dir)
+    try:
+        client.delete_collection(f"user_{user_id}")
+    except (ValueError, NotFoundError):
+        pass  # Collection 不存在时无需处理

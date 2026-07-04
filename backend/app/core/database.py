@@ -32,6 +32,21 @@ def get_db():
         db.close()
 
 
+def _ensure_sqlite_column(table_name: str, column_name: str, column_definition: str) -> None:
+    """为早期本地 SQLite 数据库补充新增列。"""
+    if not settings.DATABASE_URL.startswith("sqlite"):
+        return
+
+    with engine.begin() as conn:
+        columns = conn.exec_driver_sql(f"PRAGMA table_info({table_name})").fetchall()
+        existing_names = {column[1] for column in columns}
+        if column_name not in existing_names:
+            conn.exec_driver_sql(
+                f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}"
+            )
+
+
 def init_db():
     """初始化数据库：创建所有表"""
     Base.metadata.create_all(bind=engine)
+    _ensure_sqlite_column("messages", "agent_steps", "TEXT")

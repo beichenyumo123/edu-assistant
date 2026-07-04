@@ -5,16 +5,18 @@
     python scripts/seed_demo_knowledge.py
 
 脚本会读取 users 表中的第一个用户，为其创建几份演示资料、documents 记录，
-并写入本地检索库 chroma_db/user_<id>_docs.json。
+并写入 ChromaDB 向量库。
 """
 from __future__ import annotations
 
-import json
 import sqlite3
+import sys
 from pathlib import Path
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(BASE_DIR))
+
 DB_PATH = BASE_DIR / "edu_assistant.db"
 UPLOAD_DIR = BASE_DIR / "uploads"
 KNOWLEDGE_DIR = BASE_DIR / "chroma_db"
@@ -132,21 +134,6 @@ AI项目常见风险包括API额度不足、外部模型不可用、文件解析
 ]
 
 
-def split_text(text: str, chunk_size: int = 700, overlap: int = 120) -> list[str]:
-    normalized = "\n".join(line.strip() for line in text.splitlines() if line.strip())
-    chunks = []
-    start = 0
-    while start < len(normalized):
-        end = min(len(normalized), start + chunk_size)
-        chunk = normalized[start:end].strip()
-        if chunk:
-            chunks.append(chunk)
-        if end >= len(normalized):
-            break
-        start = max(0, end - overlap)
-    return chunks
-
-
 def main() -> None:
     if not DB_PATH.exists():
         raise SystemExit(f"数据库不存在：{DB_PATH}")
@@ -161,19 +148,26 @@ def main() -> None:
         raise SystemExit("当前没有用户，请先在网页注册一个账号。")
 
     user_id, username = user
-    vector_path = KNOWLEDGE_DIR / f"user_{user_id}_docs.json"
-    vector_records = []
-    if vector_path.exists():
-        vector_records = json.loads(vector_path.read_text(encoding="utf-8") or "[]")
+
+    from app.rag.loader import split_text
+    from app.rag.vectorstore import get_vectorstore
+
+    vectorstore = get_vectorstore(user_id=user_id)
+
+    # 清除旧文档记录和向量数据，确保幂等重跑
+    cur.execute(
+        "select id from documents where user_id = ?",
+        (user_id,),
+    )
+    old_ids = [row[0] for row in cur.fetchall()]
+    for old_id in old_ids:
+        cur.execute("delete from documents where id = ?", (old_id,))
+    vectorstore.delete()
+    if old_ids:
+        print(f"已清除 {len(old_ids)} 条旧文档记录，重新生成...")
 
     created = 0
     for item in DEMO_DOCS:
-        exists = cur.execute(
-            "select id from documents where user_id = ? and original_name = ?",
-            (user_id, item["original_name"]),
-        ).fetchone()
-        if exists:
-            continue
 
         file_path = UPLOAD_DIR / item["filename"]
         file_path.write_text(item["content"], encoding="utf-8")
@@ -194,26 +188,25 @@ def main() -> None:
             ),
         )
         document_id = cur.lastrowid
-        for index, chunk in enumerate(chunks):
-            vector_records.append(
+        vectorstore.add_texts(
+            texts=chunks,
+            metadatas=[
                 {
-                    "page_content": chunk,
-                    "metadata": {
-                        "document_id": str(document_id),
-                        "document_name": item["original_name"],
-                        "chunk_index": index,
-                        "file_type": item["file_type"],
-                    },
+                    "document_id": str(document_id),
+                    "document_name": item["original_name"],
+                    "chunk_index": i,
+                    "file_type": item["file_type"],
                 }
-            )
+                for i in range(len(chunks))
+            ],
+        )
         created += 1
 
     con.commit()
     con.close()
-    vector_path.write_text(json.dumps(vector_records, ensure_ascii=False, indent=2), encoding="utf-8")
 
     print(f"已为用户 {username}(id={user_id}) 创建 {created} 份演示资料。")
-    print(f"知识库索引：{vector_path}")
+    print(f"知识库索引：{KNOWLEDGE_DIR}（ChromaDB）")
 
 
 if __name__ == "__main__":

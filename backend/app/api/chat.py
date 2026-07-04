@@ -2,6 +2,7 @@
 对话API - HTTP问答 + WebSocket流式对话
 """
 import json
+import time
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
@@ -16,6 +17,26 @@ from ..agents.baoyan_agent import baoyan_chat_stream
 from .auth import get_current_user
 
 router = APIRouter(tags=["对话"])
+
+
+def _infer_tool_name(step: str) -> str:
+    """根据思考步骤文案补充前端展示用的工具名称。"""
+    if any(keyword in step for keyword in ("检索", "文档片段", "知识库", "匹配")):
+        return "知识库检索"
+    if any(keyword in step for keyword in ("生成", "回答")):
+        return "回答生成"
+    if any(keyword in step for keyword in ("分析", "保研")):
+        return "问题分析"
+    return "Agent"
+
+
+def _build_agent_step(step: str, started_at: float) -> dict:
+    """构造可持久化的 Agent 思考步骤。"""
+    return {
+        "text": step,
+        "tool_name": _infer_tool_name(step),
+        "elapsed_ms": max(0, int((time.perf_counter() - started_at) * 1000)),
+    }
 
 
 def _get_history(conv_id: int, db: Session) -> list:
@@ -69,16 +90,19 @@ def chat_ask(
     agent_steps = []
 
     import asyncio
+    started_at = time.perf_counter()
+
     async def _collect():
         nonlocal full_response, sources, agent_steps
         agent = edu_chat_stream if req.agent_type == "edu" else baoyan_chat_stream
         async for chunk in agent(req.message, current_user.id, history[:-1]):
             if chunk["type"] == "thinking":
-                agent_steps.append(chunk["step"])
+                agent_steps.append(_build_agent_step(chunk["step"], started_at))
             elif chunk["type"] == "token":
                 full_response += chunk["content"]
             elif chunk["type"] == "done":
                 sources = chunk.get("sources", [])
+                agent_steps.append(_build_agent_step("回答生成完成", started_at))
 
     asyncio.run(_collect())
 
@@ -88,6 +112,7 @@ def chat_ask(
         role="assistant",
         content=full_response,
         sources=json.dumps(sources, ensure_ascii=False),
+        agent_steps=json.dumps(agent_steps, ensure_ascii=False),
     )
     conv.updated_at = datetime.utcnow()
     db.add(ai_msg)
@@ -99,6 +124,7 @@ def chat_ask(
             "role": "assistant",
             "content": full_response,
             "sources": sources,
+            "agent_steps": agent_steps,
         },
         "agent_steps": agent_steps,
     }
@@ -171,20 +197,29 @@ async def chat_websocket(websocket: WebSocket, user_id: int):
             # 流式推送Agent回复
             full_response = ""
             sources = []
+            agent_steps = []
+            started_at = time.perf_counter()
 
             agent = edu_chat_stream if agent_type == "edu" else baoyan_chat_stream
             async for chunk in agent(user_msg_text, user_id, history[:-1]):
                 if chunk["type"] == "thinking":
-                    await websocket.send_json({"type": "thinking", "step": chunk["step"]})
+                    step = _build_agent_step(chunk["step"], started_at)
+                    agent_steps.append(step)
+                    await websocket.send_json({"type": "thinking", "step": step["text"], **step})
                 elif chunk["type"] == "token":
                     full_response += chunk["content"]
                     await websocket.send_json({"type": "token", "content": chunk["content"]})
                 elif chunk["type"] == "done":
                     full_response = chunk.get("content", full_response)
                     sources = chunk.get("sources", [])
+                    agent_steps.append(_build_agent_step("回答生成完成", started_at))
 
             # 发送完成信号
-            await websocket.send_json({"type": "done", "sources": sources})
+            await websocket.send_json({
+                "type": "done",
+                "sources": sources,
+                "agent_steps": agent_steps,
+            })
 
             # 保存AI消息
             ai_msg = Message(
@@ -192,6 +227,7 @@ async def chat_websocket(websocket: WebSocket, user_id: int):
                 role="assistant",
                 content=full_response,
                 sources=json.dumps(sources, ensure_ascii=False),
+                agent_steps=json.dumps(agent_steps, ensure_ascii=False),
             )
             conv.updated_at = datetime.utcnow()
             db.add(ai_msg)

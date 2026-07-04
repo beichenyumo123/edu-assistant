@@ -16,6 +16,7 @@ class Message(Base):
     role = Column(String(20), nullable=False)  # 'user' | 'assistant'
     content = Column(Text, nullable=False)
     sources = Column(Text, default=None)  # JSON格式：引用的文档来源
+    agent_steps = Column(Text, default=None)  # JSON格式：Agent思考步骤
     created_at = Column(DateTime, server_default=func.now())
 
     # 关系
@@ -28,5 +29,6 @@ class Message(Base):
             "role": self.role,
             "content": self.content,
             "sources": self.sources,
+            "agent_steps": self.agent_steps,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

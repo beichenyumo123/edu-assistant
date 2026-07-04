@@ -77,6 +77,27 @@
           <div class="msg-bubble">
             <div v-if="msg.role === 'assistant'" class="msg-content" v-html="renderMarkdown(msg.content)" />
             <div v-else class="msg-content">{{ msg.content }}</div>
+            <!-- Agent思考过程 -->
+            <div v-if="msg.role === 'assistant' && getMessageSteps(msg).length > 0" class="msg-thinking">
+              <n-collapse>
+                <n-collapse-item :title="`Agent 思考过程 · ${formatMessageDuration(msg)}`">
+                  <div v-for="(step, si) in getMessageSteps(msg)" :key="si" class="thinking-step">
+                    <n-icon size="14" color="#18a058"><checkmark-circle-outline /></n-icon>
+                    <n-tag size="tiny" :bordered="false" type="success">{{ getStepTool(step) }}</n-tag>
+                    <span class="thinking-text">{{ getStepText(step) }}</span>
+                    <span v-if="formatStepDuration(step)" class="thinking-duration">{{ formatStepDuration(step) }}</span>
+                  </div>
+                  <div v-if="isActiveAssistantMessage(idx)" class="thinking-running">
+                    <n-spin size="small" />
+                    <span>回答生成中...</span>
+                  </div>
+                </n-collapse-item>
+              </n-collapse>
+            </div>
+            <div v-else-if="isActiveAssistantMessage(idx)" class="thinking-running">
+              <n-spin size="small" />
+              <span>Agent 思考中...</span>
+            </div>
             <!-- 来源标注 -->
             <div v-if="msg.sources && msg.sources.length > 0" class="msg-sources">
               <n-collapse>
@@ -90,18 +111,6 @@
           </div>
         </div>
 
-        <!-- Agent思考过程 -->
-        <div v-if="isThinking" class="msg-row assistant">
-          <div class="msg-avatar">🤖</div>
-          <div class="msg-bubble thinking-bubble">
-            <div class="thinking-header">🧠 Agent 思考中...</div>
-            <div v-for="(step, si) in thinkingSteps" :key="si" class="thinking-step">
-              <n-icon size="14" color="#18a058"><checkmark-circle-outline /></n-icon>
-              {{ step }}
-            </div>
-            <n-spin size="small" style="margin-top: 8px" />
-          </div>
-        </div>
       </div>
 
       <!-- 输入区域 -->
@@ -165,8 +174,15 @@
             </n-card>
           </div>
           <template #footer>
-            <n-button v-if="toolResult.type === 'summary'" size="small" @click="copyToolResult">复制摘要</n-button>
-            <n-text v-else depth="3">点击知识点可直接追问</n-text>
+            <n-space>
+              <n-button v-if="toolResult.type === 'summary'" size="small" @click="copyToolResult">复制摘要</n-button>
+              <template v-else>
+                <n-button size="small" type="primary" ghost @click="downloadKnowledgeMarkdown">
+                  <n-icon><download-outline /></n-icon> 导出 Markdown
+                </n-button>
+                <n-text depth="3">点击知识点可直接追问</n-text>
+              </template>
+            </n-space>
           </template>
         </n-card>
       </n-drawer-content>
@@ -180,7 +196,7 @@ import { useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import {
   AddOutline, ChatbubblesOutline, TrashOutline, LogOutOutline,
-  FolderOpenOutline, SendOutline, CloudUploadOutline, CheckmarkCircleOutline,
+  FolderOpenOutline, SendOutline, CloudUploadOutline, CheckmarkCircleOutline, DownloadOutline,
 } from '@vicons/ionicons5'
 import { useAuthStore } from '../stores/auth'
 import { api } from '../utils/api'
@@ -239,7 +255,15 @@ onMounted(async () => {
   loadFiles()
   // 连接WebSocket
   ws = new ChatWebSocket(authStore.user?.id)
-  ws.on('thinking', (data) => thinkingSteps.value.push(data.step))
+  ws.on('thinking', (data) => {
+    const step = normalizeThinkingStep(data)
+    thinkingSteps.value.push(step)
+    const last = messages.value[messages.value.length - 1]
+    if (last && last.role === 'assistant') {
+      last.agent_steps = [...thinkingSteps.value]
+    }
+    scrollToBottom()
+  })
   ws.on('token', (data) => {
     const last = messages.value[messages.value.length - 1]
     if (last && last.role === 'assistant') {
@@ -257,6 +281,7 @@ onMounted(async () => {
     const last = messages.value[messages.value.length - 1]
     if (last && last.role === 'assistant') {
       last.sources = data.sources
+      last.agent_steps = normalizeThinkingSteps(data.agent_steps || thinkingSteps.value)
     }
     isThinking.value = false
     thinkingSteps.value = []
@@ -281,9 +306,9 @@ async function loadConversations() {
 async function loadMessages(convId) {
   try {
     const res = await api.get(`/api/conversations/${convId}`)
-    messages.value = res.data.messages || []
+    messages.value = (res.data.messages || []).map(normalizeMessage)
     await nextTick()
-    scrollToBottom()
+    scrollToBottom(true)
   } catch { /* ignore */ }
 }
 
@@ -321,11 +346,11 @@ async function sendMessage(text) {
 
   // 添加用户消息
   messages.value.push({ role: 'user', content: msg })
-  messages.value.push({ role: 'assistant', content: '', sources: [] })
+  messages.value.push({ role: 'assistant', content: '', sources: [], agent_steps: [] })
   inputText.value = ''
   isThinking.value = true
   thinkingSteps.value = []
-  scrollToBottom()
+  scrollToBottom(true)
 
   const payload = {
     conversation_id: currentConvId.value,
@@ -347,8 +372,8 @@ async function sendMessageByHttp(payload) {
     if (last && last.role === 'assistant') {
       last.content = res.data.message.content
       last.sources = res.data.message.sources || []
+      last.agent_steps = normalizeThinkingSteps(res.data.message.agent_steps || res.data.agent_steps || [])
     }
-    thinkingSteps.value = res.data.agent_steps || []
     await loadConversations()
   } catch (e) {
     nMessage.error(e.response?.data?.detail || '消息发送失败')
@@ -450,21 +475,224 @@ async function copyToolResult() {
   nMessage.success('摘要已复制')
 }
 
+function compactMarkdownText(value, maxLength = 0) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim()
+  if (maxLength > 0 && text.length > maxLength) {
+    return `${text.slice(0, Math.max(0, maxLength - 3)).trim()}...`
+  }
+  return text
+}
+
+function asExportList(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => compactMarkdownText(item, 220)).filter(Boolean)
+  }
+  if (typeof value === 'string' && value.trim()) {
+    return value.split(/\n+|[；;]/).map((item) => compactMarkdownText(item, 220)).filter(Boolean)
+  }
+  return []
+}
+
+function uniqueTexts(items) {
+  const seen = new Set()
+  const result = []
+  for (const item of items) {
+    const text = compactMarkdownText(item, 320)
+    const key = text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '').slice(0, 100)
+    if (!text || seen.has(key)) continue
+    seen.add(key)
+    result.push(text)
+  }
+  return result
+}
+
+function getPointExcerpts(point) {
+  const excerpts = []
+  if (point.source_excerpt) excerpts.push(point.source_excerpt)
+  if (Array.isArray(point.relevant_chunks)) {
+    excerpts.push(...point.relevant_chunks.map((chunk) => chunk?.text))
+  }
+  return uniqueTexts(excerpts).slice(0, 2)
+}
+
+function groupKnowledgePoints(points) {
+  const groups = []
+  const groupMap = new Map()
+  points.forEach((point, index) => {
+    const category = compactMarkdownText(point.category) || '核心知识点'
+    if (!groupMap.has(category)) {
+      const group = { category, points: [] }
+      groupMap.set(category, group)
+      groups.push(group)
+    }
+    groupMap.get(category).points.push({ ...point, exportIndex: index + 1 })
+  })
+  return groups
+}
+
+function appendBulletList(markdown, title, items) {
+  if (!items.length) return markdown
+  let next = `${markdown}${title}\n\n`
+  for (const item of items) {
+    next += `- ${item}\n`
+  }
+  return `${next}\n`
+}
+
+function downloadKnowledgeMarkdown() {
+  if (!toolResult.value?.points?.length) return
+  const points = toolResult.value.points
+  const groups = groupKnowledgePoints(points)
+  const now = new Date().toLocaleString('zh-CN')
+  let markdown = `# ${toolResult.value.title}\n\n`
+  markdown += `> 导出时间：${now}  |  共 ${points.length} 个知识点  |  ${groups.length} 个模块\n\n`
+  markdown += `## 文档概览\n\n`
+  markdown += `- 知识点数量：${points.length}\n`
+  markdown += `- 模块结构：${groups.map((group) => group.category).join('、')}\n\n`
+
+  for (const [groupIndex, group] of groups.entries()) {
+    markdown += `## ${groupIndex + 1}. ${group.category}\n\n`
+    for (const [pointIndex, point] of group.points.entries()) {
+      const title = compactMarkdownText(point.title) || `知识点 ${point.exportIndex}`
+      const description = compactMarkdownText(point.description)
+      const keyPoints = asExportList(point.key_points)
+      const examples = asExportList(point.examples)
+      const excerpts = getPointExcerpts(point)
+
+      markdown += `### ${groupIndex + 1}.${pointIndex + 1} ${title}\n\n`
+      if (description) {
+        markdown += `${description}\n\n`
+      }
+      markdown = appendBulletList(markdown, `**复习要点：**`, keyPoints)
+      markdown = appendBulletList(markdown, `**可套用表达：**`, examples)
+      if (excerpts.length) {
+        markdown += `**原文依据：**\n\n`
+        for (const excerpt of excerpts) {
+          markdown += `> ${excerpt.replace(/\n/g, '\n> ')}\n>\n`
+        }
+      }
+      markdown += `\n`
+    }
+  }
+  const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${toolResult.value.title}.md`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+  nMessage.success('Markdown 已导出')
+}
+
 function askKnowledge(point) {
   showFileDrawer.value = false
   sendMessage(`请围绕“${point.title}”展开讲解，并结合资料说明：${point.description}`)
 }
 
 // ===== 工具 =====
+function inferStepTool(text) {
+  if (/(检索|文档片段|知识库|匹配)/.test(text)) return '知识库检索'
+  if (/(生成|回答)/.test(text)) return '回答生成'
+  if (/(分析|保研)/.test(text)) return '问题分析'
+  return 'Agent'
+}
+
+function normalizeThinkingStep(step) {
+  if (typeof step === 'string') {
+    return {
+      text: step,
+      tool_name: inferStepTool(step),
+      elapsed_ms: null,
+    }
+  }
+  const text = compactMarkdownText(step?.text || step?.step || '')
+  const elapsed = Number(step?.elapsed_ms)
+  return {
+    text,
+    tool_name: compactMarkdownText(step?.tool_name) || inferStepTool(text),
+    elapsed_ms: Number.isFinite(elapsed) ? elapsed : null,
+  }
+}
+
+function normalizeThinkingSteps(steps) {
+  if (typeof steps === 'string' && steps.trim()) {
+    try {
+      return normalizeThinkingSteps(JSON.parse(steps))
+    } catch {
+      return []
+    }
+  }
+  if (!Array.isArray(steps)) return []
+  return steps.map(normalizeThinkingStep).filter((step) => step.text)
+}
+
+function normalizeMessage(message) {
+  return {
+    ...message,
+    sources: Array.isArray(message.sources) ? message.sources : [],
+    agent_steps: normalizeThinkingSteps(message.agent_steps),
+  }
+}
+
+function getMessageSteps(message) {
+  return normalizeThinkingSteps(message.agent_steps)
+}
+
+function getStepText(step) {
+  return normalizeThinkingStep(step).text
+}
+
+function getStepTool(step) {
+  return normalizeThinkingStep(step).tool_name
+}
+
+function formatDuration(ms) {
+  if (ms === null || ms === undefined) return ''
+  const value = Number(ms)
+  if (!Number.isFinite(value)) return ''
+  if (value < 1000) return `${Math.max(0, Math.round(value))} ms`
+  if (value < 10000) return `${(value / 1000).toFixed(1)} s`
+  return `${Math.round(value / 1000)} s`
+}
+
+function formatStepDuration(step) {
+  return formatDuration(normalizeThinkingStep(step).elapsed_ms)
+}
+
+function formatMessageDuration(message) {
+  const steps = getMessageSteps(message)
+  const lastWithDuration = [...steps].reverse().find((step) => step.elapsed_ms !== null)
+  if (lastWithDuration) {
+    return `总耗时 ${formatDuration(lastWithDuration.elapsed_ms)}`
+  }
+  return `${steps.length} 步`
+}
+
+function isActiveAssistantMessage(index) {
+  return isThinking.value && index === messages.value.length - 1 && messages.value[index]?.role === 'assistant'
+}
+
 function renderMarkdown(text) {
   if (!text) return ''
   return md.render(text)
 }
 
-function scrollToBottom() {
+function isNearBottom() {
+  const el = messageAreaRef.value
+  if (!el) return true
+  // 距离底部 50px 以内视为"在底部"
+  return el.scrollHeight - el.scrollTop - el.clientHeight < 50
+}
+
+function scrollToBottom(force = false) {
   nextTick(() => {
     const el = messageAreaRef.value
-    if (el) el.scrollTop = el.scrollHeight
+    if (!el) return
+    if (force || isNearBottom()) {
+      el.scrollTop = el.scrollHeight
+    }
   })
 }
 
@@ -715,24 +943,42 @@ function handleLogout() {
   font-size: 12px;
 }
 
-/* Agent思考 */
-.thinking-bubble {
-  border: 1px dashed #18a058 !important;
-}
-
-.thinking-header {
-  font-weight: bold;
-  margin-bottom: 8px;
-  color: #18a058;
+.msg-thinking {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #e4e7ed;
+  font-size: 12px;
 }
 
 .thinking-step {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  min-height: 24px;
+  font-size: 12px;
   color: #666;
-  padding: 2px 0;
+  padding: 3px 0;
+}
+
+.thinking-text {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.thinking-duration {
+  color: #909399;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.thinking-running {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: #18a058;
+  font-size: 12px;
 }
 
 /* ===== 输入区 ===== */
