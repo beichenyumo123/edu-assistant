@@ -14,7 +14,10 @@
 | 通信 | REST API + WebSocket |
 
 ## 快速启动
-
+一键启动脚本：
+```bash
+./start.sh
+```
 ### 1. 后端
 
 ```bash
