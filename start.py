@@ -35,6 +35,7 @@ CYAN = "\033[0;36m"
 NC = "\033[0m"  # reset
 
 _processes: list[subprocess.Popen] = []
+_npm_path: str | None = None
 
 
 # ── 工具函数 ─────────────────────────────────────────────────────
@@ -45,20 +46,95 @@ def _venv_python() -> Path:
     return BACKEND / "venv" / "bin" / "python"
 
 
-def _run(cmd: list[str], *, cwd: str | Path, desc: str = "", check: bool = True) -> int:
+def _run(
+    cmd: list[str],
+    *,
+    cwd: str | Path,
+    desc: str = "",
+    check: bool = True,
+    env: dict[str, str] | None = None,
+) -> int:
     """运行命令，实时输出。返回 exit code。"""
     label = f"  [{desc}]" if desc else ""
     print(f"{CYAN}>>> {label} {' '.join(cmd)}{NC}")
-    result = subprocess.run(cmd, cwd=str(cwd))
+    try:
+        result = subprocess.run(cmd, cwd=str(cwd), env=env)
+    except FileNotFoundError:
+        print(f"{RED}未找到命令: {cmd[0]}{NC}")
+        print(f"{YELLOW}请确认该命令已安装，并且所在目录已加入 PATH。{NC}")
+        sys.exit(1)
     if check and result.returncode != 0:
         print(f"{RED}命令失败 (exit={result.returncode}): {' '.join(cmd)}{NC}")
         sys.exit(result.returncode)
     return result.returncode
 
 
+def _find_command(command: str) -> str | None:
+    """在 PATH 和常见安装目录中查找命令。"""
+    found = shutil.which(command)
+    if found:
+        return found
+
+    common_dirs: list[Path] = []
+    if IS_MAC:
+        common_dirs.extend([Path("/opt/homebrew/bin"), Path("/usr/local/bin")])
+        nvm_dir = Path.home() / ".nvm" / "versions" / "node"
+        if nvm_dir.is_dir():
+            common_dirs.extend(sorted(nvm_dir.glob("*/bin"), reverse=True))
+    elif IS_WIN:
+        appdata = os.environ.get("APPDATA")
+        program_files = os.environ.get("ProgramFiles")
+        if appdata:
+            common_dirs.append(Path(appdata) / "npm")
+        if program_files:
+            common_dirs.append(Path(program_files) / "nodejs")
+    else:
+        common_dirs.extend([Path("/usr/local/bin"), Path("/usr/bin")])
+
+    for directory in common_dirs:
+        candidate = directory / command
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return None
+
+
+def _print_node_help() -> None:
+    """输出前端工具链缺失时的安装提示。"""
+    print(f"{RED}未检测到 npm，无法安装或启动前端依赖。{NC}")
+    print(f"{YELLOW}请先安装 Node.js LTS（会自带 npm），然后重新运行 ./start.sh。{NC}")
+    if IS_MAC:
+        print(f"{YELLOW}macOS 可选方式：brew install node，或从 https://nodejs.org/ 下载 LTS 版本。{NC}")
+    elif IS_WIN:
+        print(f"{YELLOW}Windows 请从 https://nodejs.org/ 下载 LTS 版本，安装后重新打开终端。{NC}")
+    else:
+        print(f"{YELLOW}Linux 可使用系统包管理器安装 nodejs/npm，或从 https://nodejs.org/ 下载。{NC}")
+    print(f"{YELLOW}安装后可用 npm --version 验证。{NC}")
+
+
 def _npm_cmd() -> str:
     """返回当前平台上的 npm 命令名"""
-    return "npm.cmd" if IS_WIN else "npm"
+    global _npm_path
+    if _npm_path:
+        return _npm_path
+
+    candidates = ["npm.cmd", "npm"] if IS_WIN else ["npm"]
+    for command in candidates:
+        found = _find_command(command)
+        if found:
+            _npm_path = found
+            return found
+    _print_node_help()
+    sys.exit(1)
+
+
+def _env_with_tool_dir(command: str) -> dict[str, str]:
+    """确保通过常见路径发现的工具目录也能被其子进程使用。"""
+    env = os.environ.copy()
+    tool_dir = str(Path(command).resolve().parent)
+    current_path = env.get("PATH", "")
+    if tool_dir and tool_dir not in current_path.split(os.pathsep):
+        env["PATH"] = tool_dir + os.pathsep + current_path
+    return env
 
 
 # ── 后端 ──────────────────────────────────────────────────────────
@@ -127,15 +203,17 @@ def setup_frontend() -> None:
 
     if not (FRONTEND / "node_modules").is_dir():
         print(f"{YELLOW}  安装前端依赖（首次可能较慢）...{NC}")
-        _run([_npm_cmd(), "install"], cwd=FRONTEND, desc="npm install")
+        npm = _npm_cmd()
+        _run([npm, "install"], cwd=FRONTEND, desc="npm install", env=_env_with_tool_dir(npm))
 
 
 def start_frontend() -> subprocess.Popen:
     """启动前端 dev server"""
     print(f"{GREEN}  前端启动中 → http://localhost:5173{NC}")
+    npm = _npm_cmd()
 
     proc = subprocess.Popen(
-        [_npm_cmd(), "run", "dev"], cwd=str(FRONTEND),
+        [npm, "run", "dev"], cwd=str(FRONTEND), env=_env_with_tool_dir(npm),
     )
     _processes.append(proc)
     return proc
@@ -182,6 +260,13 @@ def main() -> None:
     print(f"{GREEN}  ║{f'平台: {sys.platform}':^38}║{NC}")
     print(f"{GREEN}  ╚{'═' * 46}╝{NC}")
 
+    if mode not in ("all", "backend", "frontend"):
+        print(f"{RED}用法: python start.py [all|backend|frontend]{NC}")
+        sys.exit(1)
+
+    if mode in ("all", "frontend"):
+        _npm_cmd()
+
     # 注册清理
     signal.signal(signal.SIGINT, _sig_handler)
     signal.signal(signal.SIGTERM, _sig_handler)
@@ -199,10 +284,6 @@ def main() -> None:
 
     if mode in ("all", "frontend"):
         start_frontend()
-
-    if mode not in ("all", "backend", "frontend"):
-        print(f"{RED}用法: python start.py [all|backend|frontend]{NC}")
-        sys.exit(1)
 
     print(f"\n{GREEN}  ╔{'═' * 46}╗{NC}")
     print(f"{GREEN}  ║{'启动完成！按 Ctrl+C 停止所有服务':^36}║{NC}")
