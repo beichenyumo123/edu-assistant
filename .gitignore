@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+*.db
+
+# 环境变量
+.env
+
+# 上传文件
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# ChromaDB
+backend/chroma_db/
+
+# Node
+node_modules/
+dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
