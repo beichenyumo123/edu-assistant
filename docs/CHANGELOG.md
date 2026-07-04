@@ -2,6 +2,27 @@
 
 ---
 
+## 2026-07-04 — 启动脚本跨平台改造
+
+### 变更
+
+- **`start.py`** (新增) — 跨平台 Python 启动脚本，替代纯 bash 的 `start.sh`
+  - 自动检测 Windows/macOS/Linux，适配不同平台的 venv 路径和命令
+  - 支持 `python start.py [all|backend|frontend]` 选择性启动
+  - 优雅关闭：`terminate()` → `wait(5s)` → `kill()` 渐进式清理子进程
+- **`start.sh`** (重写) — 精简为 3 行薄封装，`exec python start.py "$@"` 委托给 Python
+- **`start.bat`** (新增) — Windows 批处理入口，检测 Python 后调用 `python start.py`
+- **`CLAUDE.md`** — 更新启动命令，补充 Windows 和跨平台用法
+
+### 兼容性
+
+| 平台 | 启动方式 |
+|------|---------|
+| macOS / Linux | `./start.sh` 或 `python start.py` |
+| Windows | 双击 `start.bat` 或 `python start.py` |
+
+---
+
 ## 2026-07-04 — 完成 T33：Agent 思考面板持久化
 
 ### 变更

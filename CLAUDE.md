@@ -11,10 +11,24 @@ EduAssistant is a RAG + dual-agent intelligent learning assistant covering acade
 ### One-click start
 
 ```bash
+# macOS / Linux
 ./start.sh
+
+# Windows（双击 start.bat 或命令行运行）
+start.bat
+
+# 跨平台（任何装了 Python 的系统）
+python start.py
 ```
 
 Starts both backend (:8000) and frontend (:5173) concurrently. Auto-creates venv, installs dependencies, and copies `.env.example` if needed. Ctrl+C stops both.
+
+`start.py` also supports partial start:
+
+```bash
+python start.py backend   # 仅后端
+python start.py frontend  # 仅前端
+```
 
 ### Backend (FastAPI + SQLAlchemy + SQLite)
 
