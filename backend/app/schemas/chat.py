@@ -9,6 +9,10 @@ class ChatRequest(BaseModel):
     conversation_id: int | None = Field(None, description="对话ID（为空则创建新对话）")
     message: str = Field(..., min_length=1, max_length=5000, description="用户消息")
     agent_type: str = Field(default="edu", description="Agent类型：edu | baoyan")
+    selected_document_ids: list[int] | None = Field(
+        None,
+        description="教育助手检索范围；为空表示全知识库，空数组表示不检索任何资料",
+    )
 
 
 class ChatResponse(BaseModel):

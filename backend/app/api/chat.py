@@ -50,6 +50,24 @@ def _get_history(conv_id: int, db: Session) -> list:
     return [{"role": m.role, "content": m.content} for m in messages]
 
 
+def _normalize_selected_document_ids(value) -> list[int] | None:
+    """规范化前端传来的资料勾选范围。None 表示全库，[] 表示不检索。"""
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        return None
+
+    normalized = []
+    for item in value:
+        try:
+            doc_id = int(item)
+        except (TypeError, ValueError):
+            continue
+        if doc_id > 0 and doc_id not in normalized:
+            normalized.append(doc_id)
+    return normalized
+
+
 @router.post("/api/chat/ask")
 def chat_ask(
     req: ChatRequest,
@@ -83,6 +101,7 @@ def chat_ask(
 
     # 获取历史上下文
     history = _get_history(conv.id, db)
+    selected_document_ids = _normalize_selected_document_ids(req.selected_document_ids)
 
     # 收集Agent流式输出
     full_response = ""
@@ -94,8 +113,17 @@ def chat_ask(
 
     async def _collect():
         nonlocal full_response, sources, agent_steps
-        agent = edu_chat_stream if req.agent_type == "edu" else baoyan_chat_stream
-        async for chunk in agent(req.message, current_user.id, history[:-1]):
+        if req.agent_type == "edu":
+            stream = edu_chat_stream(
+                req.message,
+                current_user.id,
+                history[:-1],
+                selected_document_ids=selected_document_ids,
+            )
+        else:
+            stream = baoyan_chat_stream(req.message, current_user.id, history[:-1])
+
+        async for chunk in stream:
             if chunk["type"] == "thinking":
                 agent_steps.append(_build_agent_step(chunk["step"], started_at))
             elif chunk["type"] == "token":
@@ -156,6 +184,9 @@ async def chat_websocket(websocket: WebSocket, user_id: int):
             user_msg_text = req_data.get("message", "")
             conversation_id = req_data.get("conversation_id")
             agent_type = req_data.get("agent_type", "edu")
+            selected_document_ids = _normalize_selected_document_ids(
+                req_data.get("selected_document_ids")
+            )
 
             # 验证用户
             user = db.query(User).filter(User.id == user_id).first()
@@ -200,8 +231,17 @@ async def chat_websocket(websocket: WebSocket, user_id: int):
             agent_steps = []
             started_at = time.perf_counter()
 
-            agent = edu_chat_stream if agent_type == "edu" else baoyan_chat_stream
-            async for chunk in agent(user_msg_text, user_id, history[:-1]):
+            if agent_type == "edu":
+                stream = edu_chat_stream(
+                    user_msg_text,
+                    user_id,
+                    history[:-1],
+                    selected_document_ids=selected_document_ids,
+                )
+            else:
+                stream = baoyan_chat_stream(user_msg_text, user_id, history[:-1])
+
+            async for chunk in stream:
                 if chunk["type"] == "thinking":
                     step = _build_agent_step(chunk["step"], started_at)
                     agent_steps.append(step)

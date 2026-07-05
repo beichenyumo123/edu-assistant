@@ -45,19 +45,32 @@ def retrieve_relevant_chunks(
     query: str,
     user_id: int,
     top_k: int = None,
+    document_ids: list[int] | None = None,
 ) -> List[RetrievedDocument]:
     """从用户知识库检索相关文档块，并补充证据元数据。"""
     k = top_k or settings.RETRIEVAL_TOP_K
+    if document_ids is not None and not document_ids:
+        return []
+
+    where = None
+    if document_ids:
+        normalized_ids = [str(doc_id) for doc_id in document_ids]
+        where = (
+            {"document_id": normalized_ids[0]}
+            if len(normalized_ids) == 1
+            else {"document_id": {"$in": normalized_ids}}
+        )
+
     vectorstore = get_vectorstore(user_id=user_id)
 
     try:
-        scored_docs = vectorstore.similarity_search_with_score(query, k=k)
+        scored_docs = vectorstore.similarity_search_with_score(query, k=k, where=where)
         return [
             _enrich_doc(doc, score, rank)
             for rank, (doc, score) in enumerate(scored_docs, 1)
         ]
     except Exception:
-        docs = vectorstore.similarity_search(query, k=k)
+        docs = vectorstore.similarity_search(query, k=k, where=where)
         return [_enrich_doc(doc, None, rank) for rank, doc in enumerate(docs, 1)]
 
 

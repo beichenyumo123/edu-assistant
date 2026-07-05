@@ -24,10 +24,20 @@ async def edu_chat_stream(
     query: str,
     user_id: int,
     conversation_history: list = None,
+    selected_document_ids: list[int] | None = None,
 ) -> AsyncGenerator[Dict, None]:
     """教育助手流式对话。"""
-    yield {"type": "thinking", "step": "正在检索知识库..."}
-    docs = retrieve_relevant_chunks(query, user_id=user_id)
+    if selected_document_ids is not None:
+        selected_count = len(selected_document_ids)
+        yield {"type": "thinking", "step": f"正在检索已勾选的 {selected_count} 份资料..."}
+    else:
+        yield {"type": "thinking", "step": "正在检索知识库..."}
+
+    docs = retrieve_relevant_chunks(
+        query,
+        user_id=user_id,
+        document_ids=selected_document_ids,
+    )
     context = format_retrieved_context(docs)
 
     if docs:

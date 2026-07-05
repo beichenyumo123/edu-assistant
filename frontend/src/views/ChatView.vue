@@ -120,6 +120,18 @@
 
       <!-- 输入区域 -->
       <div class="input-area">
+        <div v-if="agentType === 'edu'" class="scope-bar">
+          <n-tag size="small" :type="selectedReadyFiles.length ? 'info' : 'warning'">
+            检索范围：{{ selectedScopeLabel }}
+          </n-tag>
+          <span v-for="file in selectedScopePreview" :key="file.id" class="scope-file">
+            {{ file.original_name }}
+          </span>
+          <span v-if="selectedScopeExtraCount > 0" class="scope-extra">
+            +{{ selectedScopeExtraCount }}
+          </span>
+          <n-button text size="tiny" @click="openKnowledgeBase">选择资料</n-button>
+        </div>
         <n-input-group>
           <n-input v-model:value="inputText" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }"
             placeholder="输入你的问题... (Enter发送，Shift+Enter换行)"
@@ -146,12 +158,25 @@
         <div v-if="files.length === 0">
           <n-empty description="还没有上传过文件" />
         </div>
-        <n-list v-else>
+        <template v-else>
+          <div class="file-select-toolbar">
+            <n-text depth="3">已选 {{ selectedReadyFiles.length }} / {{ readyFiles.length }}</n-text>
+            <n-space size="small">
+              <n-button size="tiny" text @click="selectAllReadyFiles">全选</n-button>
+              <n-button size="tiny" text @click="clearSelectedFiles">清空</n-button>
+            </n-space>
+          </div>
+        </template>
+        <n-list v-if="files.length > 0">
           <n-list-item v-for="f in files" :key="f.id">
             <template #prefix>
-              <n-tag :type="f.status === 'ready' ? 'success' : f.status === 'error' ? 'error' : 'warning'" size="small">
-                {{ f.status === 'ready' ? '已就绪' : f.status === 'error' ? '失败' : '处理中' }}
-              </n-tag>
+              <div class="file-prefix">
+                <n-checkbox :checked="isFileSelected(f.id)" :disabled="f.status !== 'ready'"
+                  @update:checked="(checked) => toggleFileSelection(f.id, checked)" />
+                <n-tag :type="f.status === 'ready' ? 'success' : f.status === 'error' ? 'error' : 'warning'" size="small">
+                  {{ f.status === 'ready' ? '已就绪' : f.status === 'error' ? '失败' : '处理中' }}
+                </n-tag>
+              </div>
             </template>
             <n-thing :title="f.original_name" :description="`${formatSize(f.file_size)} · ${f.chunk_count}块 · ${f.created_at?.substring(0, 10)}`" />
             <template #suffix>
@@ -222,6 +247,8 @@ const inputText = ref('')
 const isThinking = ref(false)
 const thinkingSteps = ref([])
 const files = ref([])
+const selectedFileIds = ref([])
+const selectionTouched = ref(false)
 const showFileDrawer = ref(false)
 const uploading = ref(false)
 const toolLoading = ref('')
@@ -248,6 +275,16 @@ const baoyanPresets = [
   '我的条件能保什么层次的学校？',
 ]
 const presetQuestions = computed(() => agentType.value === 'edu' ? eduPresets : baoyanPresets)
+const readyFiles = computed(() => files.value.filter((file) => file.status === 'ready'))
+const selectedReadyFiles = computed(() => readyFiles.value.filter((file) => selectedFileIds.value.includes(file.id)))
+const selectedScopePreview = computed(() => selectedReadyFiles.value.slice(0, 2))
+const selectedScopeExtraCount = computed(() => Math.max(0, selectedReadyFiles.value.length - selectedScopePreview.value.length))
+const selectedScopeLabel = computed(() => {
+  if (readyFiles.value.length === 0) return '暂无可用资料'
+  if (selectedReadyFiles.value.length === 0) return '未选择资料'
+  if (selectedReadyFiles.value.length === readyFiles.value.length) return `全部资料 (${readyFiles.value.length})`
+  return `已选 ${selectedReadyFiles.value.length} 份`
+})
 
 // ===== 生命周期 =====
 onMounted(async () => {
@@ -361,6 +398,7 @@ async function sendMessage(text) {
     conversation_id: currentConvId.value,
     message: msg,
     agent_type: agentType.value,
+    selected_document_ids: agentType.value === 'edu' ? [...selectedFileIds.value] : undefined,
   }
 
   const sentByWs = ws?.send(payload)
@@ -402,6 +440,7 @@ async function loadFiles() {
   try {
     const res = await api.get('/api/files')
     files.value = res.data.files || []
+    syncSelectedFiles()
   } catch { /* ignore */ }
 }
 
@@ -419,7 +458,7 @@ async function handleUpload({ file, onFinish, onError }) {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
     nMessage.success(`${file.name} 上传成功`)
-    loadFiles()
+    await loadFiles()
     onFinish()
   } catch (e) {
     nMessage.error(e.response?.data?.detail || '上传失败')
@@ -433,8 +472,43 @@ async function deleteFile(fileId) {
   try {
     await api.delete(`/api/files/${fileId}`)
     nMessage.success('文件已删除')
-    loadFiles()
+    selectedFileIds.value = selectedFileIds.value.filter((id) => id !== fileId)
+    await loadFiles()
   } catch { /* ignore */ }
+}
+
+function syncSelectedFiles() {
+  const readyIds = readyFiles.value.map((file) => file.id)
+  if (!selectionTouched.value) {
+    selectedFileIds.value = [...readyIds]
+    return
+  }
+  selectedFileIds.value = selectedFileIds.value.filter((id) => readyIds.includes(id))
+}
+
+function isFileSelected(fileId) {
+  return selectedFileIds.value.includes(fileId)
+}
+
+function toggleFileSelection(fileId, checked) {
+  selectionTouched.value = true
+  if (checked) {
+    if (!selectedFileIds.value.includes(fileId)) {
+      selectedFileIds.value = [...selectedFileIds.value, fileId]
+    }
+  } else {
+    selectedFileIds.value = selectedFileIds.value.filter((id) => id !== fileId)
+  }
+}
+
+function selectAllReadyFiles() {
+  selectionTouched.value = true
+  selectedFileIds.value = readyFiles.value.map((file) => file.id)
+}
+
+function clearSelectedFiles() {
+  selectionTouched.value = true
+  selectedFileIds.value = []
 }
 
 async function summarizeFile(file) {
@@ -991,6 +1065,43 @@ function handleLogout() {
   padding: 12px 20px 20px;
   border-top: 1px solid #eee;
   background: #fafafa;
+}
+
+.scope-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  margin-bottom: 8px;
+  color: #606266;
+  font-size: 12px;
+  overflow: hidden;
+}
+
+.scope-file {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scope-extra {
+  color: #909399;
+  white-space: nowrap;
+}
+
+.file-select-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.file-prefix {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .tool-markdown {

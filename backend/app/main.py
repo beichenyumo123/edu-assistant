@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .core.config import settings
 from .core.database import init_db
 from .api import auth, files, chat, conversations, tools
+from .rag.embeddings import preload_embeddings
 
 
 @asynccontextmanager
@@ -15,6 +16,9 @@ async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时：初始化数据库
     init_db()
+    print("⏳ 正在加载本地向量模型...")
+    preload_embeddings()
+    print(f"✅ 本地向量模型加载完成: {settings.LOCAL_EMBEDDING_MODEL}")
     print(f"✅ 数据库初始化完成")
     print(f"✅ {settings.APP_NAME} v{settings.APP_VERSION} 启动成功")
     print(f"📡 API文档: http://{settings.HOST}:{settings.PORT}/docs")

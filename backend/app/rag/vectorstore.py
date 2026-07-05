@@ -54,22 +54,24 @@ class ChromaVectorStore:
         ]
         self._store.add_texts(texts=texts_list, metadatas=metadata_list, ids=ids)
 
-    def similarity_search(self, query: str, k: int = 4) -> list[RetrievedDocument]:
+    def similarity_search(
+        self, query: str, k: int = 4, where: dict | None = None
+    ) -> list[RetrievedDocument]:
         """语义检索，返回最相关的 k 个文档块。"""
-        lc_docs = self._store.similarity_search(query, k=k)
+        lc_docs = self._store.similarity_search(query, k=k, filter=where)
         return [
             RetrievedDocument(page_content=doc.page_content, metadata=doc.metadata or {})
             for doc in lc_docs
         ]
 
     def similarity_search_with_score(
-        self, query: str, k: int = 4
+        self, query: str, k: int = 4, where: dict | None = None
     ) -> list[tuple[RetrievedDocument, float]]:
         """语义检索，返回带余弦距离的 (文档块, 分数) 列表。
 
         分数为余弦距离（0 = 完全相同，2 = 完全相反），越小越相关。
         """
-        lc_results = self._store.similarity_search_with_score(query, k=k)
+        lc_results = self._store.similarity_search_with_score(query, k=k, filter=where)
         return [
             (RetrievedDocument(page_content=doc.page_content, metadata=doc.metadata or {}), score)
             for doc, score in lc_results
