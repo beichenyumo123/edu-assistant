@@ -18,8 +18,8 @@ python-docx==1.1.0
 aiofiles==23.2.0
 websockets==12.0
 httpx==0.27.0
-pydantic==2.6.0
-pydantic-settings==2.2.0
+pydantic==2.8.2
+pydantic-settings==2.4.0
 
 # LLM 接口（兼容 DeepSeek / SiliconFlow 的 OpenAI 风格 API）
 langchain-core>=0.3.0

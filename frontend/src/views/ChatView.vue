@@ -103,7 +103,12 @@
               <n-collapse>
                 <n-collapse-item title="📎 参考来源">
                   <div v-for="(s, si) in msg.sources" :key="si" class="source-item">
-                    📄 文档{{ s.document_id }} · 块{{ s.chunk_index }}: {{ s.text?.substring(0, 150) }}...
+                    📄 {{ s.document_name || ('文档' + s.document_id) }} · 块{{ s.chunk_index }}
+                    <span v-if="s.evidence_id"> · {{ s.evidence_id }}</span>
+                    <span v-if="s.source_type"> · 类型: {{ s.source_type }}</span>
+                    <span v-if="s.trust_level"> · 可信度: {{ s.trust_level }}</span>
+                    <span v-if="s.retrieval_score !== undefined"> · 距离: {{ Number(s.retrieval_score).toFixed(4) }}</span>
+                    : {{ s.text?.substring(0, 150) }}...
                   </div>
                 </n-collapse-item>
               </n-collapse>

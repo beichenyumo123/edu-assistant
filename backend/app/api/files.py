@@ -29,6 +29,23 @@ def validate_file(filename: str) -> str:
         )
     return ext
 
+def infer_source_profile(filename: str, file_type: str) -> dict:
+    """根据文件名粗略推断资料类型和可信等级。"""
+    name = (filename or "").lower()
+
+    rules = [
+        ("teacher_note", "high", ["教师", "老师", "讲义", "note", "notes"]),
+        ("textbook", "high", ["教材", "课本", "textbook", "book"]),
+        ("courseware", "high", ["课件", "ppt", "slides", "courseware"]),
+        ("exercise", "medium", ["习题", "练习", "作业", "题库", "exercise", "homework"]),
+        ("web", "low", ["网页", "博客", "web", "blog"]),
+    ]
+
+    for source_type, trust_level, keywords in rules:
+        if any(keyword in name for keyword in keywords):
+            return {"source_type": source_type, "trust_level": trust_level}
+
+    return {"source_type": "student_upload", "trust_level": "medium"}
 
 @router.post("/upload")
 async def upload_file(
@@ -77,6 +94,10 @@ async def upload_file(
 
         # 文本分块
         chunks = split_text(text)
+        source_profile = {
+            "source_type": "student_upload",
+            "trust_level": "medium",
+        }
 
         # 存入ChromaDB（用user_id隔离）
         vectorstore = get_vectorstore(user_id=current_user.id)
@@ -88,6 +109,8 @@ async def upload_file(
                     "document_name": doc.original_name,
                     "chunk_index": i,
                     "file_type": doc.file_type,
+                    "source_type": source_profile["source_type"],
+                    "trust_level": source_profile["trust_level"],
                 }
                 for i in range(len(chunks))
             ],

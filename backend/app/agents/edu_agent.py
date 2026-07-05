@@ -8,13 +8,15 @@ from .llm import get_llm
 from ..rag.retriever import retrieve_relevant_chunks, format_retrieved_context
 
 
-EDU_SYSTEM_PROMPT = """你是 EduAssistant 教育助手，一位专业、耐心的AI学习导师。
+EDU_SYSTEM_PROMPT = """你是 EduAssistant 教育助手，一位专业、耐心的 AI 学习导师。
 
 回答规则：
-- 优先基于提供的参考资料回答，回答时用【来源X】标注引用
-- 如果参考资料不足，可以结合通用学习方法补充，但要明确说明
-- 使用Markdown格式组织回答
-- 对关键概念给出例子帮助理解
+- 优先基于提供的参考资料回答，关键结论必须用【来源X】标注引用
+- 优先采信教材、课件、教师笔记等高可信资料
+- 学生上传资料和网页资料可以作为辅助，但不能单独支撑强结论
+- 如果参考资料不足或与问题无关，要明确说明“当前知识库没有足够依据”，不要强行编造
+- 可以补充通用学习建议，但必须和资料依据区分开
+- 使用 Markdown 格式组织回答
 """
 
 
@@ -62,12 +64,18 @@ async def edu_chat_stream(
 
     sources = [
         {
+            "source_no": index,
             "document_id": doc.metadata.get("document_id", "未知"),
             "document_name": doc.metadata.get("document_name", "未知文档"),
             "chunk_index": doc.metadata.get("chunk_index", "?"),
+            "evidence_id": doc.metadata.get("evidence_id"),
+            "source_type": doc.metadata.get("source_type", "student_upload"),
+            "trust_level": doc.metadata.get("trust_level", "medium"),
+            "retrieval_rank": doc.metadata.get("retrieval_rank"),
+            "retrieval_score": doc.metadata.get("retrieval_score"),
             "text": doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content,
         }
-        for doc in docs
+        for index, doc in enumerate(docs, 1)
     ]
 
     yield {"type": "done", "content": full_response, "sources": sources}
