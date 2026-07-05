@@ -69,9 +69,13 @@ def retrieve_relevant_chunks(
             _enrich_doc(doc, score, rank)
             for rank, (doc, score) in enumerate(scored_docs, 1)
         ]
-    except Exception:
-        docs = vectorstore.similarity_search(query, k=k, where=where)
-        return [_enrich_doc(doc, None, rank) for rank, doc in enumerate(docs, 1)]
+    except Exception as exc:
+        try:
+            docs = vectorstore.similarity_search(query, k=k, where=where)
+            return [_enrich_doc(doc, None, rank) for rank, doc in enumerate(docs, 1)]
+        except Exception as fallback_exc:
+            print(f"⚠️ 知识库检索失败，已跳过本次 RAG 检索: {fallback_exc or exc}")
+            return []
 
 
 def format_retrieved_context(docs: List[RetrievedDocument]) -> str:

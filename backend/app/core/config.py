@@ -36,10 +36,10 @@ class Settings(BaseSettings):
     SILICONFLOW_BASE_URL: str = "https://api.siliconflow.cn/v1"
     SILICONFLOW_MODEL: str = "Qwen/Qwen3.5-397B"
 
-    # 嵌入模型配置（语义搜索统一使用本地模型）
+    # 嵌入模型配置（语义搜索统一使用本地 BGE 小模型）
     EMBEDDING_PROVIDER: str = "local"                # 兼容旧 .env；当前固定使用本地模型
-    EMBEDDING_MODEL: str = "BAAI/bge-m3"             # 兼容旧 .env；当前不用于向量化
-    LOCAL_EMBEDDING_MODEL: str = "shibing624/text2vec-base-chinese"
+    EMBEDDING_MODEL: str = "BAAI/bge-small-zh-v1.5"  # 兼容旧 .env；当前不用于向量化
+    LOCAL_EMBEDDING_MODEL: str = "BAAI/bge-small-zh-v1.5"
 
     # ChromaDB向量库
     CHROMA_PERSIST_DIR: str = "./chroma_db"

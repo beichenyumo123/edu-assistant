@@ -18,8 +18,9 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     """对话响应"""
     conversation_id: int
-    message: dict  # {role, content, sources}
+    message: dict  # {role, content, sources, agent_steps, evaluation}
     agent_steps: list = Field(default_factory=list, description="Agent执行步骤")
+    evaluation: dict | None = Field(default=None, description="RAG在线评价指标")
 
 
 class ConversationCreate(BaseModel):

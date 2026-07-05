@@ -154,6 +154,81 @@ def _dedup_key(text: str) -> str:
     return re.sub(r"\W+", "", text.lower())[:100]
 
 
+def _resolve_document_path(doc: Document) -> str:
+    """兼容历史数据：优先使用入库文件名，缺失时尝试原始文件名。"""
+    candidates = [
+        os.path.join(settings.UPLOAD_DIR, doc.filename),
+        os.path.join(settings.UPLOAD_DIR, doc.original_name),
+    ]
+    for path in candidates:
+        if path and os.path.exists(path):
+            return path
+    raise HTTPException(
+        status_code=404,
+        detail="资料文件不存在，请重新上传该资料后再生成摘要或知识点。",
+    )
+
+
+def _safe_llm_invoke(prompt: str, temperature: float = 0.3) -> str | None:
+    """调用 LLM，失败时返回 None，交给本地规则兜底。"""
+    try:
+        llm = get_llm(temperature=temperature)
+        result = llm.invoke(prompt)
+        return str(getattr(result, "content", result) or "").strip()
+    except Exception as exc:
+        print(f"⚠️ 工具 LLM 调用失败，已使用本地规则兜底: {exc}")
+        return None
+
+
+def _fallback_summary(text: str, length: str = "medium") -> str:
+    """在远程 LLM 不可用时，用原文句段生成一个可用摘要。"""
+    units = _split_excerpt_units(text)
+    if not units:
+        return "### 摘要\n\n当前资料未解析出可用于摘要的文本内容。"
+
+    limit = {"short": 3, "medium": 5, "long": 8}.get(length, 5)
+    selected = units[:limit]
+    lead = _compact_text(" ".join(selected[:2]), 360)
+    bullets = "\n".join(f"- {_compact_text(unit, 180)}" for unit in selected)
+    return f"### 摘要\n\n{lead}\n\n### 主要要点\n\n{bullets}"
+
+
+def _fallback_knowledge_points(text: str, max_points: int = 8) -> list[dict]:
+    """在远程 LLM 不可用时，从原文句段中抽取基础知识点。"""
+    units = _split_excerpt_units(text)
+    points = []
+    seen = set()
+    for unit in units:
+        excerpt = _compact_text(unit, 220)
+        key = _dedup_key(excerpt)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        title = _compact_text(re.sub(r"[：:。！？!?；;].*$", "", excerpt), 36)
+        if len(title) < 6:
+            title = f"知识点{len(points) + 1}"
+        points.append({
+            "category": "核心知识点",
+            "title": title,
+            "description": excerpt,
+            "key_points": [excerpt],
+            "examples": [],
+            "source_excerpt": excerpt,
+            "relevant_chunks": [{"text": excerpt, "chunk_index": None}],
+        })
+        if len(points) >= max_points:
+            break
+    return points or [{
+        "category": "核心知识点",
+        "title": "资料内容",
+        "description": "当前资料未解析出足够结构化的知识点。",
+        "key_points": [],
+        "examples": [],
+        "source_excerpt": "",
+        "relevant_chunks": [],
+    }]
+
+
 @router.post("/summarize")
 def summarize_document(
     body: dict,
@@ -171,7 +246,7 @@ def summarize_document(
         raise HTTPException(status_code=404, detail="文档不存在")
 
     # 读取文件文本
-    file_path = os.path.join(settings.UPLOAD_DIR, doc.filename)
+    file_path = _resolve_document_path(doc)
     text = parse_file(file_path, f".{doc.file_type}")
 
     # 截取前4000字做摘要
@@ -190,10 +265,11 @@ def summarize_document(
 
 请直接给出摘要，使用Markdown格式。"""
 
-    llm = get_llm(temperature=0.3)
-    result = llm.invoke(prompt)
+    content = _safe_llm_invoke(prompt, temperature=0.3)
+    if not content:
+        content = _fallback_summary(text, length)
 
-    return {"summary": result.content, "document_id": doc_id}
+    return {"summary": content, "document_id": doc_id}
 
 
 @router.post("/extract-knowledge")
@@ -211,7 +287,7 @@ def extract_knowledge(
     if not doc:
         raise HTTPException(status_code=404, detail="文档不存在")
 
-    file_path = os.path.join(settings.UPLOAD_DIR, doc.filename)
+    file_path = _resolve_document_path(doc)
     text = parse_file(file_path, f".{doc.file_type}")
     text_preview = text[:12000]
 
@@ -243,24 +319,30 @@ def extract_knowledge(
 原文内容：
 {text_preview}"""
 
-    llm = get_llm(temperature=0.3)
-    result = llm.invoke(prompt)
+    content = _safe_llm_invoke(prompt, temperature=0.3)
 
     # 尝试解析 JSON，并兼容旧格式
-    try:
-        raw_points = _parse_knowledge_json(result.content)
-    except Exception:
-        raw_points = [{"title": "知识点", "description": result.content}]
+    if content:
+        try:
+            raw_points = _parse_knowledge_json(content)
+        except Exception:
+            raw_points = [{"title": "知识点", "description": content}]
 
-    knowledge_points = [
-        _normalize_knowledge_point(point, index)
-        for index, point in enumerate(raw_points, 1)
-    ]
+        knowledge_points = [
+            _normalize_knowledge_point(point, index)
+            for index, point in enumerate(raw_points, 1)
+        ]
+    else:
+        knowledge_points = _fallback_knowledge_points(text_preview)
 
     # 为每个知识点检索相关原文片段
     from ..rag.vectorstore import get_vectorstore
 
-    vectorstore = get_vectorstore(user_id=current_user.id)
+    try:
+        vectorstore = get_vectorstore(user_id=current_user.id)
+    except Exception as exc:
+        print(f"⚠️ 知识点向量库加载失败，已退回原文片段兜底: {exc}")
+        vectorstore = None
     doc_id_str = str(doc_id)
 
     DISTANCE_THRESHOLD = 1.0   # 余弦距离阈值：<1.0 表示有一定相关性
@@ -274,8 +356,9 @@ def extract_knowledge(
             " ".join(point.get("examples", [])),
         ])
         try:
-            scored = vectorstore.similarity_search_with_score(query, k=6)
-        except Exception:
+            scored = vectorstore.similarity_search_with_score(query, k=6) if vectorstore else []
+        except Exception as exc:
+            print(f"⚠️ 知识点相关片段检索失败，已跳过向量召回: {exc}")
             scored = []
 
         relevant = []

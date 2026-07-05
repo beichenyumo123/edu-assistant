@@ -40,12 +40,21 @@ async def baoyan_chat_stream(
 
     yield {"type": "thinking", "step": "正在生成回答..."}
 
-    llm = get_llm(temperature=0.7)
     full_response = ""
-    async for chunk in llm.astream(prompt):
-        content = chunk.content
-        if content:
-            full_response += content
-            yield {"type": "token", "content": content}
+    try:
+        llm = get_llm(temperature=0.7)
+        async for chunk in llm.astream(prompt):
+            content = chunk.content
+            if content:
+                full_response += content
+                yield {"type": "token", "content": content}
+    except Exception as exc:
+        full_response = (
+            "抱歉，生成回答时出错了。当前调用大模型生成答案失败。\n\n"
+            f"错误类型：{type(exc).__name__}\n\n"
+            "请检查 DeepSeek API Key、模型名、base_url 或当前网络/代理配置后重试。"
+        )
+        yield {"type": "thinking", "step": "回答生成失败，已返回错误提示"}
+        yield {"type": "token", "content": full_response}
 
     yield {"type": "done", "content": full_response, "sources": []}

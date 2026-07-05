@@ -107,12 +107,13 @@ def chat_ask(
     full_response = ""
     sources = []
     agent_steps = []
+    evaluation = None
 
     import asyncio
     started_at = time.perf_counter()
 
     async def _collect():
-        nonlocal full_response, sources, agent_steps
+        nonlocal full_response, sources, agent_steps, evaluation
         if req.agent_type == "edu":
             stream = edu_chat_stream(
                 req.message,
@@ -130,6 +131,7 @@ def chat_ask(
                 full_response += chunk["content"]
             elif chunk["type"] == "done":
                 sources = chunk.get("sources", [])
+                evaluation = chunk.get("evaluation")
                 agent_steps.append(_build_agent_step("回答生成完成", started_at))
 
     asyncio.run(_collect())
@@ -141,6 +143,7 @@ def chat_ask(
         content=full_response,
         sources=json.dumps(sources, ensure_ascii=False),
         agent_steps=json.dumps(agent_steps, ensure_ascii=False),
+        evaluation=json.dumps(evaluation, ensure_ascii=False) if evaluation else None,
     )
     conv.updated_at = datetime.utcnow()
     db.add(ai_msg)
@@ -153,8 +156,10 @@ def chat_ask(
             "content": full_response,
             "sources": sources,
             "agent_steps": agent_steps,
+            "evaluation": evaluation,
         },
         "agent_steps": agent_steps,
+        "evaluation": evaluation,
     }
 
 
@@ -229,6 +234,7 @@ async def chat_websocket(websocket: WebSocket, user_id: int):
             full_response = ""
             sources = []
             agent_steps = []
+            evaluation = None
             started_at = time.perf_counter()
 
             if agent_type == "edu":
@@ -252,6 +258,7 @@ async def chat_websocket(websocket: WebSocket, user_id: int):
                 elif chunk["type"] == "done":
                     full_response = chunk.get("content", full_response)
                     sources = chunk.get("sources", [])
+                    evaluation = chunk.get("evaluation")
                     agent_steps.append(_build_agent_step("回答生成完成", started_at))
 
             # 发送完成信号
@@ -259,6 +266,7 @@ async def chat_websocket(websocket: WebSocket, user_id: int):
                 "type": "done",
                 "sources": sources,
                 "agent_steps": agent_steps,
+                "evaluation": evaluation,
             })
 
             # 保存AI消息
@@ -268,6 +276,7 @@ async def chat_websocket(websocket: WebSocket, user_id: int):
                 content=full_response,
                 sources=json.dumps(sources, ensure_ascii=False),
                 agent_steps=json.dumps(agent_steps, ensure_ascii=False),
+                evaluation=json.dumps(evaluation, ensure_ascii=False) if evaluation else None,
             )
             conv.updated_at = datetime.utcnow()
             db.add(ai_msg)

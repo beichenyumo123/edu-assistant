@@ -5,6 +5,8 @@
 from typing import AsyncGenerator, Dict
 
 from .llm import get_llm
+from ..core.config import settings
+from ..rag.evaluation import evaluate_rag_answer
 from ..rag.retriever import retrieve_relevant_chunks, format_retrieved_context
 
 
@@ -64,13 +66,22 @@ async def edu_chat_stream(
 
     yield {"type": "thinking", "step": "正在生成回答..."}
 
-    llm = get_llm(temperature=0.7)
     full_response = ""
-    async for chunk in llm.astream(prompt):
-        content = chunk.content
-        if content:
-            full_response += content
-            yield {"type": "token", "content": content}
+    try:
+        llm = get_llm(temperature=0.7)
+        async for chunk in llm.astream(prompt):
+            content = chunk.content
+            if content:
+                full_response += content
+                yield {"type": "token", "content": content}
+    except Exception as exc:
+        full_response = (
+            "抱歉，生成回答时出错了。知识库检索已经完成，但调用大模型生成答案失败。\n\n"
+            f"错误类型：{type(exc).__name__}\n\n"
+            "请检查 DeepSeek API Key、模型名、base_url 或当前网络/代理配置后重试。"
+        )
+        yield {"type": "thinking", "step": "回答生成失败，已返回错误提示"}
+        yield {"type": "token", "content": full_response}
 
     sources = [
         {
@@ -88,4 +99,17 @@ async def edu_chat_stream(
         for index, doc in enumerate(docs, 1)
     ]
 
-    yield {"type": "done", "content": full_response, "sources": sources}
+    evaluation = evaluate_rag_answer(
+        query=query,
+        answer=full_response,
+        docs=docs,
+        selected_document_ids=selected_document_ids,
+        top_k=settings.RETRIEVAL_TOP_K,
+    )
+
+    yield {
+        "type": "done",
+        "content": full_response,
+        "sources": sources,
+        "evaluation": evaluation,
+    }

@@ -98,6 +98,28 @@
               <n-spin size="small" />
               <span>Agent 思考中...</span>
             </div>
+            <!-- RAG评价指标 -->
+            <div v-if="msg.evaluation" class="msg-evaluation">
+              <n-collapse>
+                <n-collapse-item title="RAG 评价指标">
+                  <div class="metric-grid">
+                    <div v-for="item in getEvaluationSummary(msg.evaluation)" :key="item.label" class="metric-item">
+                      <span class="metric-label">{{ item.label }}</span>
+                      <strong :class="item.className">{{ item.value }}</strong>
+                    </div>
+                  </div>
+                  <div class="metric-detail">
+                    <span>检索块: {{ msg.evaluation.retrieval?.retrieved_chunks ?? 0 }}</span>
+                    <span>命中: {{ msg.evaluation.retrieval?.retrieval_hit ? '是' : '否' }}</span>
+                    <span>关键结论: {{ msg.evaluation.generation?.supported_claim_count ?? 0 }}/{{ msg.evaluation.generation?.claim_count ?? 0 }}</span>
+                    <span>无效引用: {{ msg.evaluation.generation?.invalid_citation_count ?? 0 }}</span>
+                  </div>
+                  <div v-if="msg.evaluation.notes?.length" class="metric-notes">
+                    <div v-for="note in msg.evaluation.notes" :key="note">{{ note }}</div>
+                  </div>
+                </n-collapse-item>
+              </n-collapse>
+            </div>
             <!-- 来源标注 -->
             <div v-if="msg.sources && msg.sources.length > 0" class="msg-sources">
               <n-collapse>
@@ -324,6 +346,7 @@ onMounted(async () => {
     if (last && last.role === 'assistant') {
       last.sources = data.sources
       last.agent_steps = normalizeThinkingSteps(data.agent_steps || thinkingSteps.value)
+      last.evaluation = normalizeEvaluation(data.evaluation)
     }
     isThinking.value = false
     thinkingSteps.value = []
@@ -388,7 +411,7 @@ async function sendMessage(text) {
 
   // 添加用户消息
   messages.value.push({ role: 'user', content: msg })
-  messages.value.push({ role: 'assistant', content: '', sources: [], agent_steps: [] })
+  messages.value.push({ role: 'assistant', content: '', sources: [], agent_steps: [], evaluation: null })
   inputText.value = ''
   isThinking.value = true
   thinkingSteps.value = []
@@ -416,6 +439,7 @@ async function sendMessageByHttp(payload) {
       last.content = res.data.message.content
       last.sources = res.data.message.sources || []
       last.agent_steps = normalizeThinkingSteps(res.data.message.agent_steps || res.data.agent_steps || [])
+      last.evaluation = normalizeEvaluation(res.data.message.evaluation || res.data.evaluation)
     }
     await loadConversations()
   } catch (e) {
@@ -712,7 +736,48 @@ function normalizeMessage(message) {
     ...message,
     sources: Array.isArray(message.sources) ? message.sources : [],
     agent_steps: normalizeThinkingSteps(message.agent_steps),
+    evaluation: normalizeEvaluation(message.evaluation),
   }
+}
+
+function normalizeEvaluation(evaluation) {
+  if (typeof evaluation === 'string' && evaluation.trim()) {
+    try {
+      return normalizeEvaluation(JSON.parse(evaluation))
+    } catch {
+      return null
+    }
+  }
+  if (!evaluation || typeof evaluation !== 'object') return null
+  return evaluation
+}
+
+function formatMetricPercent(value) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return '—'
+  return `${Math.round(number * 100)}%`
+}
+
+function metricClass(value, reverse = false) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return ''
+  const good = reverse ? number <= 0.25 : number >= 0.7
+  const bad = reverse ? number >= 0.55 : number < 0.4
+  if (good) return 'metric-good'
+  if (bad) return 'metric-bad'
+  return 'metric-warn'
+}
+
+function getEvaluationSummary(evaluation) {
+  const safe = normalizeEvaluation(evaluation) || {}
+  return [
+    { label: '总分', value: formatMetricPercent(safe.overall_score), className: metricClass(safe.overall_score) },
+    { label: '检索质量', value: formatMetricPercent(safe.retrieval_quality), className: metricClass(safe.retrieval_quality) },
+    { label: '证据支撑', value: formatMetricPercent(safe.groundedness), className: metricClass(safe.groundedness) },
+    { label: '引用覆盖', value: formatMetricPercent(safe.citation_coverage), className: metricClass(safe.citation_coverage) },
+    { label: '引用正确', value: formatMetricPercent(safe.citation_validity), className: metricClass(safe.citation_validity) },
+    { label: '幻觉风险', value: formatMetricPercent(safe.hallucination_risk), className: metricClass(safe.hallucination_risk, true) },
+  ]
 }
 
 function getMessageSteps(message) {
@@ -1014,6 +1079,48 @@ function handleLogout() {
 .msg-sources {
   margin-top: 8px;
   font-size: 12px;
+}
+
+.msg-evaluation {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+}
+
+.metric-item {
+  padding: 8px;
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  background: #fafafa;
+}
+
+.metric-label {
+  display: block;
+  margin-bottom: 4px;
+  color: #777;
+}
+
+.metric-good { color: #18a058; }
+.metric-warn { color: #f0a020; }
+.metric-bad { color: #d03050; }
+
+.metric-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 10px;
+  color: #666;
+}
+
+.metric-notes {
+  margin-top: 8px;
+  color: #888;
+  line-height: 1.5;
 }
 
 .source-item {

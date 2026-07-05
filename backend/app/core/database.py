@@ -50,3 +50,4 @@ def init_db():
     """初始化数据库：创建所有表"""
     Base.metadata.create_all(bind=engine)
     _ensure_sqlite_column("messages", "agent_steps", "TEXT")
+    _ensure_sqlite_column("messages", "evaluation", "TEXT")
