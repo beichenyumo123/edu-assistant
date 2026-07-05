@@ -26,6 +26,8 @@ FRONTEND = ROOT / "frontend"
 
 IS_WIN = sys.platform == "win32"
 IS_MAC = sys.platform == "darwin"
+REQUIRED_PYTHON = (3, 11)
+REQUIRED_PYTHON_DISPLAY = "3.11"
 
 # ── ANSI 颜色（Windows 10+ 原生支持） ────────────────────────────
 RED = "\033[0;31m"
@@ -39,6 +41,39 @@ _npm_path: str | None = None
 
 
 # ── 工具函数 ─────────────────────────────────────────────────────
+def _ensure_supported_python() -> None:
+    """确保启动脚本运行在项目约定的 Python 版本上。"""
+    current = sys.version_info[:2]
+    if current == REQUIRED_PYTHON:
+        return
+
+    current_display = f"{current[0]}.{current[1]}"
+    print(f"{RED}当前 Python 版本为 {current_display}，但项目约定使用 Python {REQUIRED_PYTHON_DISPLAY}。{NC}")
+    print(f"{YELLOW}请安装/切换到 Python {REQUIRED_PYTHON_DISPLAY} 后重新运行启动脚本。{NC}")
+    if IS_MAC:
+        print(f"{YELLOW}如果使用 conda，可执行：conda create -n edu-assistant python=3.11{NC}")
+        print(f"{YELLOW}然后：conda activate edu-assistant && ./start.sh{NC}")
+    elif IS_WIN:
+        print(f"{YELLOW}Windows 可使用 py -3.11 start.py，或安装 Python 3.11 后重新打开终端。{NC}")
+    else:
+        print(f"{YELLOW}请通过系统包管理器、pyenv 或 conda 安装 Python 3.11。{NC}")
+    sys.exit(1)
+
+
+def _python_version_text(python: str | Path) -> str:
+    """返回某个 Python 可执行文件的版本文本。"""
+    try:
+        result = subprocess.run(
+            [str(python), "--version"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        return "unknown"
+    return (result.stdout or result.stderr).strip() or "unknown"
+
+
 def _venv_python() -> Path:
     """返回 venv 内的 Python 可执行文件路径"""
     if IS_WIN:
@@ -153,6 +188,11 @@ def setup_backend() -> None:
         _run([sys.executable, "-m", "venv", str(venv_dir)], cwd=BACKEND, desc="venv")
 
     python = str(_venv_python())
+    venv_version = _python_version_text(python)
+    if f"Python {REQUIRED_PYTHON_DISPLAY}." not in venv_version:
+        print(f"{RED}  检测到 backend/venv 使用的是 {venv_version}，不是 Python {REQUIRED_PYTHON_DISPLAY}。{NC}")
+        print(f"{YELLOW}  请删除旧虚拟环境后重新启动：rm -rf backend/venv && ./start.sh{NC}")
+        sys.exit(1)
 
     # 2. 安装依赖
     try:
@@ -259,6 +299,8 @@ def main() -> None:
     print(f"{GREEN}  ║{'EduAssistant 一键启动':^38}║{NC}")
     print(f"{GREEN}  ║{f'平台: {sys.platform}':^38}║{NC}")
     print(f"{GREEN}  ╚{'═' * 46}╝{NC}")
+
+    _ensure_supported_python()
 
     if mode not in ("all", "backend", "frontend"):
         print(f"{RED}用法: python start.py [all|backend|frontend]{NC}")
