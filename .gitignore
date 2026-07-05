@@ -26,12 +26,8 @@ env/
 *.sqlite
 *.sqlite3
 
-# ===== Uploads (keep directory, ignore contents) =====
-backend/uploads/*
-!backend/uploads/.gitkeep
-
-# ===== Vector store =====
-backend/chroma_db/
+# ===== Uploads =====
+# (目录内容需要提交到仓库)
 
 # ===== Testing & Coverage =====
 .pytest_cache/

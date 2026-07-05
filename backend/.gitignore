@@ -2,5 +2,3 @@
 __pycache__/
 *.pyc
 edu_assistant.db
-chroma_db/
-uploads/
