@@ -1,18 +1,29 @@
 """
 检索器 - 封装 ChromaDB 查询逻辑
 """
+import os
 from typing import List
+
+from ..core.database import SessionLocal
+from ..models.document import Document
 from .vectorstore import RetrievedDocument, get_vectorstore
 from ..core.config import settings
 
 
 SOURCE_TYPE_LABELS = {
-    "textbook": "教材",
-    "courseware": "课件",
-    "exercise": "习题",
-    "teacher_note": "教师笔记",
+    "employee_handbook": "员工手册",
+    "policy": "公司制度",
+    "workflow": "流程规范",
+    "security": "信息安全规范",
+    "compliance": "合规资料",
+    "training": "岗位培训资料",
+    "product_doc": "产品/业务资料",
+    "textbook": "培训教材",
+    "courseware": "培训课件",
+    "teacher_note": "培训讲义",
     "web": "网页资料",
-    "student_upload": "学生上传资料",
+    "student_upload": "历史上传资料",
+    "enterprise_upload": "企业上传资料",
 }
 
 TRUST_LEVEL_LABELS = {
@@ -22,6 +33,32 @@ TRUST_LEVEL_LABELS = {
 }
 
 
+def _document_file_exists(doc: Document) -> bool:
+    """检查资料原文件是否仍存在，避免历史残留向量参与检索。"""
+    candidates = [
+        os.path.join(settings.UPLOAD_DIR, doc.filename),
+        os.path.join(settings.UPLOAD_DIR, doc.original_name),
+    ]
+    return any(path and os.path.exists(path) for path in candidates)
+
+
+def _active_document_ids(user_id: int, requested_ids: list[int] | None) -> list[int]:
+    """返回当前用户可参与检索的 ready 资料 ID。"""
+    db = SessionLocal()
+    try:
+        query = db.query(Document).filter(
+            Document.user_id == user_id,
+            Document.status == "ready",
+        )
+        if requested_ids is not None:
+            query = query.filter(Document.id.in_(requested_ids))
+
+        docs = query.all()
+        return [int(doc.id) for doc in docs if _document_file_exists(doc)]
+    finally:
+        db.close()
+
+
 def _enrich_doc(doc: RetrievedDocument, score, rank: int) -> RetrievedDocument:
     metadata = dict(doc.metadata or {})
 
@@ -29,7 +66,7 @@ def _enrich_doc(doc: RetrievedDocument, score, rank: int) -> RetrievedDocument:
     chunk_index = metadata.get("chunk_index", "?")
 
     metadata.setdefault("document_name", metadata.get("source", "未知文档"))
-    metadata.setdefault("source_type", "student_upload")
+    metadata.setdefault("source_type", "enterprise_upload")
     metadata.setdefault("trust_level", "medium")
     metadata["evidence_id"] = f"doc{document_id}_chunk{chunk_index}"
     metadata["retrieval_rank"] = rank
@@ -47,19 +84,21 @@ def retrieve_relevant_chunks(
     top_k: int = None,
     document_ids: list[int] | None = None,
 ) -> List[RetrievedDocument]:
-    """从用户知识库检索相关文档块，并补充证据元数据。"""
+    """从企业知识库检索相关文档块，并补充证据元数据。"""
     k = top_k or settings.RETRIEVAL_TOP_K
     if document_ids is not None and not document_ids:
         return []
 
-    where = None
-    if document_ids:
-        normalized_ids = [str(doc_id) for doc_id in document_ids]
-        where = (
-            {"document_id": normalized_ids[0]}
-            if len(normalized_ids) == 1
-            else {"document_id": {"$in": normalized_ids}}
-        )
+    active_ids = _active_document_ids(user_id, document_ids)
+    if not active_ids:
+        return []
+
+    normalized_ids = [str(doc_id) for doc_id in active_ids]
+    where = (
+        {"document_id": normalized_ids[0]}
+        if len(normalized_ids) == 1
+        else {"document_id": {"$in": normalized_ids}}
+    )
 
     vectorstore = get_vectorstore(user_id=user_id)
 
@@ -74,7 +113,7 @@ def retrieve_relevant_chunks(
             docs = vectorstore.similarity_search(query, k=k, where=where)
             return [_enrich_doc(doc, None, rank) for rank, doc in enumerate(docs, 1)]
         except Exception as fallback_exc:
-            print(f"⚠️ 知识库检索失败，已跳过本次 RAG 检索: {fallback_exc or exc}")
+            print(f"⚠️ 企业知识库检索失败，已跳过本次 RAG 检索: {fallback_exc or exc}")
             return []
 
 

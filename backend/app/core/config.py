@@ -3,14 +3,18 @@
 集中管理所有配置项，支持环境变量覆盖
 """
 import os
+from pathlib import Path
 from pydantic_settings import BaseSettings
+
+BACKEND_DIR = Path(__file__).resolve().parents[2]
+DATA_DIR = BACKEND_DIR / "data"
 
 
 class Settings(BaseSettings):
     """应用配置"""
 
     # 应用基础
-    APP_NAME: str = "EduAssistant"
+    APP_NAME: str = "OnboardAgent"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = True
 
@@ -42,14 +46,14 @@ class Settings(BaseSettings):
     LOCAL_EMBEDDING_MODEL: str = "BAAI/bge-small-zh-v1.5"
 
     # ChromaDB向量库
-    CHROMA_PERSIST_DIR: str = "./chroma_db"
+    CHROMA_PERSIST_DIR: str = str(DATA_DIR / "chroma_db")
     CHUNK_SIZE: int = 800
     CHUNK_OVERLAP: int = 200
     RETRIEVAL_TOP_K: int = 4
 
     # 文件上传
     MAX_UPLOAD_SIZE_MB: int = 20
-    UPLOAD_DIR: str = "./uploads"
+    UPLOAD_DIR: str = str(DATA_DIR / "uploads")
     ALLOWED_EXTENSIONS: set = {".pdf", ".docx", ".txt", ".md"}
 
     # CORS

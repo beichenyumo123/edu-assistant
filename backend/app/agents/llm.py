@@ -2,7 +2,7 @@
 LLM 网关
 
 优先调用配置好的真实大模型；没有 API Key 或依赖缺失时，自动降级到本地
-演示模型，保证 Sprint1 的注册、上传、RAG 问答、摘要、知识点提取流程可离线跑通。
+演示模型，保证注册、上传、RAG 问答、制度速览、培训知识提取流程可离线跑通。
 """
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ class LocalDemoLLM:
     """无需网络的演示 LLM，输出稳定、可解释。"""
 
     def invoke(self, prompt: str) -> LLMResponse:
-        if "JSON数组" in prompt and "知识点" in prompt:
+        if "JSON数组" in prompt and ("知识卡片" in prompt or "知识点" in prompt):
             return LLMResponse(self._knowledge_json(prompt))
         if "摘要" in prompt or "总结" in prompt:
             return LLMResponse(self._summary(prompt))
@@ -79,12 +79,12 @@ class LocalDemoLLM:
         core = sentences[:5]
         bullets = "\n".join(f"- {sentence[:120]}" for sentence in core[:4])
         return (
-            "### 文档摘要\n"
+            "### 制度速览\n"
             f"{core[0][:180]}\n\n"
-            "### 核心要点\n"
+            "### 新人需要关注\n"
             f"{bullets}\n\n"
-            "### 学习建议\n"
-            "建议先通读摘要，再围绕上述要点逐条追问，最后用习题或复述检查掌握情况。"
+            "### 入职建议\n"
+            "建议先确认适用对象和执行流程，再围绕不清楚的制度条款继续追问，并以 HR 或直属负责人最终口径为准。"
         )
 
     def _knowledge_json(self, prompt: str) -> str:
@@ -94,7 +94,7 @@ class LocalDemoLLM:
         for index, sentence in enumerate(sentences[:8], 1):
             title = re.sub(r"[：:，,。！？!?\s].*$", "", sentence).strip()[:18]
             if len(title) < 4:
-                title = f"知识点{index}"
+                title = f"培训要点{index}"
             examples = re.findall(r'"([^"]{6,120})"', sentence)
             points.append(
                 {
@@ -109,9 +109,9 @@ class LocalDemoLLM:
         if not points:
             points = [
                 {
-                    "category": "核心知识点",
+                    "category": "核心培训知识",
                     "title": "文档主题",
-                    "description": "当前文档内容较短，可继续上传更完整资料后再提取。",
+                    "description": "当前文档内容较短，可继续上传更完整的企业培训资料后再提取。",
                     "key_points": [],
                     "examples": [],
                     "source_excerpt": "",
@@ -121,15 +121,17 @@ class LocalDemoLLM:
 
     def _knowledge_category(self, sentence: str) -> str:
         text = sentence.lower()
-        if any(keyword in text for keyword in ("开头", "论证", "转折", "观点", "建议", "结尾", "hook", "analysis", "contrast")):
-            return "文章结构"
-        if any(keyword in text for keyword in ("倒装", "虚拟", "强调句", "句式", "从句", "非谓语", "only", "not only")):
-            return "句式升级"
-        if any(keyword in text for keyword in ("同义词", "词汇", "替换", "vocabulary", "good", "bad", "important", "think")):
-            return "词汇表达"
-        if any(keyword in text for keyword in ("连接词", "逻辑", "therefore", "moreover", "nevertheless", "hence")):
-            return "逻辑衔接"
-        return "核心知识点"
+        if any(keyword in text for keyword in ("入职", "报道", "试用期", "转正", "导师", "onboarding", "probation")):
+            return "入职流程"
+        if any(keyword in text for keyword in ("考勤", "请假", "休假", "加班", "attendance", "leave")):
+            return "人事制度"
+        if any(keyword in text for keyword in ("报销", "差旅", "发票", "预算", "reimbursement", "travel")):
+            return "财务报销"
+        if any(keyword in text for keyword in ("信息安全", "保密", "账号", "权限", "数据", "security", "privacy")):
+            return "信息安全"
+        if any(keyword in text for keyword in ("合规", "廉洁", "利益冲突", "行为准则", "compliance", "ethics")):
+            return "合规要求"
+        return "核心培训知识"
 
     def _answer(self, prompt: str) -> str:
         context = _extract_between(prompt, "参考资料：", "用户问题：")
@@ -144,22 +146,22 @@ class LocalDemoLLM:
             joined = "\n".join(evidence)
             return (
                 f"### 回答\n"
-                f"围绕你的问题“{query or '当前问题'}”，我从已上传资料中找到了相关片段。"
+                f"围绕你的问题“{query or '当前问题'}”，我从企业培训资料中找到了相关片段。"
                 "可以先按下面几个要点理解：\n\n"
                 f"{joined}\n\n"
                 "### 结论\n"
-                "这些资料说明，回答问题时应优先抓住材料中的核心概念、关键原因和对应例子。"
-                "如果需要，我可以继续把这些内容整理成提纲、表格或练习题。"
+                "这些资料说明，新员工应优先按公司正式制度和流程执行。"
+                "如果问题涉及薪酬、合同、处分或合规风险，请进一步向 HR、法务或直属负责人确认。"
             )
 
         return (
             "### 回答\n"
-            f"你问的是“{query or prompt[:80]}”。当前知识库里还没有检索到足够相关的上传资料，"
-            "所以我先给出通用学习建议：先补充课程资料或笔记，再围绕主题提问，系统就能基于资料给出带来源的回答。\n\n"
+            f"你问的是“{query or prompt[:80]}”。当前知识库里还没有检索到足够相关的企业培训资料，"
+            "所以我先给出通用入职建议：先补充员工手册、制度流程或岗位培训文档，再围绕具体场景提问，系统就能基于资料给出带来源的回答。\n\n"
             "### 建议\n"
-            "- 上传 PDF、Word、TXT 或 Markdown 学习资料\n"
-            "- 针对一个章节或概念提问\n"
-            "- 使用“生成摘要”和“知识点提取”快速建立学习框架"
+            "- 上传 PDF、Word、TXT 或 Markdown 格式的企业培训资料\n"
+            "- 针对考勤、报销、信息安全、权限申请等具体流程提问\n"
+            "- 使用“制度速览”和“培训知识卡片”快速建立入职知识框架"
         )
 
 

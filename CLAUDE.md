@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-EduAssistant is a RAG + dual-agent intelligent learning assistant covering academic tutoring (`edu_agent`) and graduate school recommendation (`baoyan_agent`). It is in early skeleton phase (single initial commit, ~46 source files, no tests or linting configured).
+OnboardAgent is a RAG-based enterprise onboarding assistant focused on answering new-employee questions over uploaded company handbooks, policies, workflows, security rules, and role-training materials. It is in early skeleton phase (single initial commit, ~46 source files, no tests or linting configured).
 
 ## Commands
 
@@ -68,18 +68,17 @@ All agents and tools call `get_llm()` — never instantiate an LLM directly.
 
 ### RAG pipeline (upload → retrieve → answer)
 
-1. **Upload** (`api/files.py`): file is saved to `uploads/`, then immediately parsed and chunked.
+1. **Upload** (`api/files.py`): file is saved to `backend/data/uploads/`, then immediately parsed and chunked.
 2. **Parse** (`rag/loader.py`): `parse_file()` handles PDF (PyPDF2), Word (python-docx), TXT, Markdown. `split_text()` chunks by character count with overlap.
-3. **Store** (`rag/vectorstore.py`): `LocalVectorStore` is a **JSON-file-based keyword scorer**, not real ChromaDB. It uses token overlap + coverage scoring, not embeddings. Data stored per-user at `chroma_db/user_{user_id}_docs.json`. The API (`add_texts`, `similarity_search`, `delete`) is designed to be swappable with real ChromaDB later.
+3. **Store** (`rag/vectorstore.py`): `ChromaVectorStore` stores local BGE embeddings in ChromaDB under `backend/data/chroma_db/`, isolated by user collection.
 4. **Retrieve** (`rag/retriever.py`): `retrieve_relevant_chunks()` queries the vector store and `format_retrieved_context()` builds the prompt context block.
 5. **Generate** (`agents/edu_agent.py`): `edu_chat_stream()` is an async generator that retrieves context, builds a prompt with the last 3 conversation rounds (6 messages), and streams LLM output token-by-token.
 
-### Dual-agent system
+### Onboarding agent
 
-- **edu_agent** (`agents/edu_agent.py`): tutoring agent that uses RAG — retrieves from user's uploaded documents before answering.
-- **baoyan_agent** (`agents/baoyan_agent.py`): graduate school advising agent — general LLM conversation without RAG.
+- **edu_agent** (`agents/edu_agent.py`): onboarding agent that uses RAG — retrieves from uploaded company training documents before answering.
 
-Both expose an `async generator` streaming interface. Agents are invoked from `api/chat.py`.
+The onboarding agent exposes an `async generator` streaming interface and is invoked from `api/chat.py`.
 
 ### WebSocket streaming protocol
 

@@ -1,5 +1,5 @@
 """
-EduAssistant - FastAPI 主入口
+OnboardAgent - FastAPI 主入口
 """
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -30,7 +30,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="基于RAG+多智能体的全栈智能学习助手",
+    description="基于 RAG 的企业新员工入职培训知识助手",
     lifespan=lifespan,
 )
 

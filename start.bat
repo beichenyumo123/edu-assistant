@@ -1,5 +1,5 @@
 @echo off
-:: EduAssistant 一键启动（Windows）
+:: OnboardAgent 一键启动（Windows）
 :: 双击运行，或在终端中运行: start.bat
 cd /d "%~dp0"
 

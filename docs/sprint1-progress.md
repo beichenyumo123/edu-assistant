@@ -1,4 +1,4 @@
-# Sprint1 进度总览 — EduAssistant
+# Sprint1 进度总览 — OnboardAgent
 
 > 更新日期：2026-07-04 | 状态：代码骨架 100%，剩余全局联调验证
 

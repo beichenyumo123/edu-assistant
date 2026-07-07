@@ -9,8 +9,8 @@ class RegisterRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=50, description="用户名")
     email: str = Field(..., max_length=100, description="邮箱")
     password: str = Field(..., min_length=6, max_length=50, description="密码(6-50位)")
-    grade: str | None = Field(None, max_length=20, description="年级")
-    major: str | None = Field(None, max_length=100, description="专业")
+    grade: str | None = Field(None, max_length=20, description="部门（兼容旧字段 grade）")
+    major: str | None = Field(None, max_length=100, description="岗位（兼容旧字段 major）")
 
 
 class LoginRequest(BaseModel):
@@ -33,5 +33,4 @@ class UserInfoResponse(BaseModel):
     email: str
     grade: str | None
     major: str | None
-    target_school: str | None
     avatar_url: str | None

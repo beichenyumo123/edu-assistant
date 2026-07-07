@@ -158,7 +158,7 @@
 - **`backend/app/rag/embeddings.py`** — embedding 模型工厂函数 `get_embeddings()`
   - 优先使用 SiliconFlow 云端 API（`BAAI/bge-m3`，1024 维）
   - 无 API Key 时自动回退本地 `shibing624/text2vec-base-chinese`（768 维）
-- **ChromaDB 持久化存储**于 `backend/chroma_db/`，按 `user_{id}` 隔离 Collection
+- **ChromaDB 持久化存储**于 `backend/data/chroma_db/`，按 `user_{id}` 隔离 Collection
 
 ### 变更
 

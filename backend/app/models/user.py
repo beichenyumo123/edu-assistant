@@ -15,9 +15,8 @@ class User(Base):
     email = Column(String(100), unique=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
     avatar_url = Column(String(255), default=None)
-    grade = Column(String(20), default=None)        # 年级，如"大三"
-    major = Column(String(100), default=None)       # 专业
-    target_school = Column(String(100), default=None)  # 保研目标院校
+    grade = Column(String(20), default=None)        # 兼容旧字段：企业场景中表示部门
+    major = Column(String(100), default=None)       # 兼容旧字段：企业场景中表示岗位
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now())
 
@@ -29,7 +28,6 @@ class User(Base):
             "avatar_url": self.avatar_url,
             "grade": self.grade,
             "major": self.major,
-            "target_school": self.target_school,
             "is_active": self.is_active,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

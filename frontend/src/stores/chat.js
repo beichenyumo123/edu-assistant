@@ -6,7 +6,6 @@ export const useChatStore = defineStore('chat', () => {
   const conversations = ref([])
   const currentConvId = ref(null)
   const messages = ref([])
-  const agentType = ref('edu')     // 'edu' | 'baoyan'
   const isThinking = ref(false)
   const thinkingSteps = ref([])
 
@@ -26,12 +25,6 @@ export const useChatStore = defineStore('chat', () => {
     } catch {
       messages.value = []
     }
-  }
-
-  function switchAgent(type) {
-    agentType.value = type
-    currentConvId.value = null
-    messages.value = []
   }
 
   function addMessage(msg) {
@@ -56,9 +49,9 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   return {
-    conversations, currentConvId, messages, agentType,
+    conversations, currentConvId, messages,
     isThinking, thinkingSteps,
-    loadConversations, loadMessages, switchAgent,
+    loadConversations, loadMessages,
     addMessage, appendToken, setThinking, clearThinking,
   }
 })

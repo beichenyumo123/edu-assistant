@@ -26,8 +26,19 @@ env/
 *.sqlite
 *.sqlite3
 
-# ===== Uploads =====
-# (目录内容需要提交到仓库)
+# ===== Runtime data =====
+backend/data/
+
+# Legacy runtime dirs kept ignored in case older local configs recreate them.
+backend/uploads/
+backend/chroma_db/
+backend/eval_results/
+/uploads/
+/chroma_db/
+
+# ===== Generated artifacts =====
+artifacts/
+outputs/
 
 # ===== Testing & Coverage =====
 .pytest_cache/

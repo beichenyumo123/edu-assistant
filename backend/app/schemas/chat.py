@@ -8,10 +8,10 @@ class ChatRequest(BaseModel):
     """发送消息请求"""
     conversation_id: int | None = Field(None, description="对话ID（为空则创建新对话）")
     message: str = Field(..., min_length=1, max_length=5000, description="用户消息")
-    agent_type: str = Field(default="edu", description="Agent类型：edu | baoyan")
+    agent_type: str = Field(default="edu", description="兼容旧客户端字段；当前统一使用入职培训助手")
     selected_document_ids: list[int] | None = Field(
         None,
-        description="教育助手检索范围；为空表示全知识库，空数组表示不检索任何资料",
+        description="入职培训资料检索范围；为空表示全知识库，空数组表示不检索任何资料",
     )
 
 
@@ -25,7 +25,7 @@ class ChatResponse(BaseModel):
 
 class ConversationCreate(BaseModel):
     """创建对话"""
-    agent_type: str = Field(default="edu")
+    agent_type: str = Field(default="edu", description="兼容旧字段；当前统一为 edu")
     title: str = Field(default="新对话", max_length=200)
 
 
@@ -41,5 +41,5 @@ class SummaryRequest(BaseModel):
 
 
 class KnowledgeExtractRequest(BaseModel):
-    """知识点提取请求"""
+    """培训知识卡片提取请求"""
     document_id: int = Field(..., description="文档ID")

@@ -1,6 +1,6 @@
-# EduAssistant - 智能学习助手
+# OnboardAgent - 企业新员工入职培训助手
 
-基于 RAG + 多智能体的全栈智能学习助手，覆盖「学习辅导 + 升学规划」双场景。
+基于 RAG 的企业新员工入职培训知识助手，面向大型公司员工手册、规章制度、流程规范、信息安全和岗位培训资料，提供可追溯来源的问答、制度速览和培训知识卡片。
 
 ## 技术栈
 
@@ -8,7 +8,7 @@
 |------|------|
 | 前端 | Vue 3 + Vite + Naive UI + Pinia |
 | 后端 | FastAPI + LangChain + SQLAlchemy |
-| AI | DeepSeek / 硅基流动 Qwen3.5 |
+| AI | DeepSeek / 本地 BGE 向量模型 |
 | 向量库 | ChromaDB + SentenceTransformers |
 | 数据库 | SQLite |
 | 通信 | REST API + WebSocket |
@@ -58,13 +58,15 @@ edu-assistant/
 │   │   ├── core/       # 配置/数据库/安全
 │   │   ├── models/     # SQLAlchemy模型
 │   │   ├── schemas/    # Pydantic Schema
-│   │   ├── agents/     # AI Agent
+│   │   ├── agents/     # 入职培训 Agent
 │   │   └── rag/        # RAG检索模块
+│   ├── data/           # 本地运行数据（uploads/chroma_db，已忽略）
+│   ├── scripts/        # 数据重建、批量评测等脚本
 │   └── requirements.txt
 ├── frontend/
 │   └── src/
 │       ├── views/      # 页面组件
 │       ├── stores/     # Pinia状态管理
 │       └── utils/      # 工具类
-└── data/               # 预置数据
+└── artifacts/          # 生成物与评测报告（已忽略）
 ```

@@ -6,7 +6,7 @@
 
 ## 1. 项目概览
 
-- **项目名**：EduAssistant — 基于RAG+双Agent的智能学习助手
+- **项目名**：OnboardAgent — 基于RAG的企业新员工入职培训助手
 - **方向**：AI大模型
 - **团队**：智学先锋，5人，10天周期（7/2-7/11），Scrum开发
 - **当前状态**：项目骨架已完成（46个文件），Sprint1待开始
@@ -39,8 +39,7 @@ backend/app/
 │   └── tools.py         ← POST /api/tools/summarize, /api/tools/extract-knowledge
 ├── agents/
 │   ├── llm.py           ← get_llm() 工厂函数，支持DeepSeek/硅基流动切换
-│   ├── edu_agent.py     ← edu_chat_stream() 异步生成器，RAG检索→Prompt→流式输出
-│   └── baoyan_agent.py  ← baoyan_chat_stream() 保研助手对话
+│   ├── edu_agent.py     ← edu_chat_stream() 异步生成器，企业培训资料RAG检索→Prompt→流式输出
 └── rag/
     ├── loader.py        ← parse_file() 多格式解析（PDF/Word/TXT/MD）+ split_text()
     ├── vectorstore.py   ← get_vectorstore(user_id) ChromaDB按用户隔离
@@ -56,7 +55,7 @@ frontend/src/
 ├── router/index.js      ← /login + /（含token路由守卫）
 ├── stores/
 │   ├── auth.js          ← login/register/logout/fetchUser
-│   └── chat.js          ← conversations/messages/agentType/thinking状态
+│   └── chat.js          ← conversations/messages/thinking状态
 ├── utils/
 │   ├── api.js           ← axios实例（baseURL/token拦截器/401跳转）
 │   ├── websocket.js     ← ChatWebSocket类（connect/send/on/自动重连）
@@ -95,7 +94,7 @@ frontend/src/
 
 **提示词**：
 ```
-我正在进行一个FastAPI+Vue3的项目EduAssistant。请帮我：
+我正在进行一个FastAPI+Vue3的项目OnboardAgent。请帮我：
 
 1. 检查 backend/requirements.txt，确认所有包名正确且版本兼容
 2. 检查 backend/app/ 下所有Python文件的import路径是否正确
@@ -109,7 +108,7 @@ frontend/src/
 
 **提示词**：
 ```
-项目EduAssistant的后端代码在 backend/app/ 下。
+项目OnboardAgent的后端代码在 backend/app/ 下。
 
 请阅读以下文件：
 - backend/app/api/chat.py（WebSocket对话）
@@ -131,7 +130,7 @@ frontend/src/
 
 **提示词**：
 ```
-项目EduAssistant的前端代码在 frontend/src/ 下。
+项目OnboardAgent的前端代码在 frontend/src/ 下。
 
 当前ChatView.vue使用WebSocket进行流式对话，但可能需要调试以下问题：
 1. [具体问题描述]
@@ -140,13 +139,13 @@ frontend/src/
 给出修复方案。
 ```
 
-### Batch 4：Sprint2——保研Agent + 习题工具
+### Batch 4：Sprint2——企业培训工具增强
 
-**目标**：双Agent完整功能
+**目标**：围绕企业入职培训问答增强制度速览、知识卡片和质量观测能力
 
 **提示词**：
 ```
-项目EduAssistant已有教育助手Agent（edu_agent.py），现在需要添加保研助手相关功能。
+项目OnboardAgent已有入职培训Agent（edu_agent.py），现在需要添加更多企业培训工具能力。
 
 当前的教育Agent参考：backend/app/agents/edu_agent.py
 
@@ -163,7 +162,7 @@ frontend/src/
 请按顺序阅读以下文件，然后给我一个项目结构总结：
 
 1. G:\生产实习\edu-assistant\README.md
-2. G:\生产实习\智学先锋-EduAssistant项目设计报告.md
+2. G:\生产实习\智学先锋-OnboardAgent项目设计报告.md
 3. G:\生产实习\edu-assistant\backend\app\main.py
 4. G:\生产实习\edu-assistant\backend\app\core\config.py
 5. G:\生产实习\edu-assistant\backend\app\models\__init__.py
@@ -178,7 +177,7 @@ frontend/src/
 ### 模板B：开发新功能
 
 ```
-我要在EduAssistant项目中添加[功能描述]。
+我要在OnboardAgent项目中添加[功能描述]。
 
 相关现有代码：
 - backend/app/agents/edu_agent.py（参考Agent的实现模式）
@@ -195,7 +194,7 @@ frontend/src/
 ### 模板C：修Bug
 
 ```
-EduAssistant项目运行时报错：
+OnboardAgent项目运行时报错：
 
 [粘贴完整报错信息]
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# EduAssistant 一键启动（macOS / Linux）
+# OnboardAgent 一键启动（macOS / Linux）
 # Windows 用户请双击 start.bat 或运行: python start.py
 set -e
 

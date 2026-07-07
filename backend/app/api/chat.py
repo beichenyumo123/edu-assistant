@@ -13,7 +13,6 @@ from ..models.conversation import Conversation
 from ..models.message import Message
 from ..schemas.chat import ChatRequest
 from ..agents.edu_agent import edu_chat_stream
-from ..agents.baoyan_agent import baoyan_chat_stream
 from .auth import get_current_user
 
 router = APIRouter(tags=["对话"])
@@ -22,10 +21,10 @@ router = APIRouter(tags=["对话"])
 def _infer_tool_name(step: str) -> str:
     """根据思考步骤文案补充前端展示用的工具名称。"""
     if any(keyword in step for keyword in ("检索", "文档片段", "知识库", "匹配")):
-        return "知识库检索"
+        return "企业知识检索"
     if any(keyword in step for keyword in ("生成", "回答")):
         return "回答生成"
-    if any(keyword in step for keyword in ("分析", "保研")):
+    if "分析" in step:
         return "问题分析"
     return "Agent"
 
@@ -51,7 +50,7 @@ def _get_history(conv_id: int, db: Session) -> list:
 
 
 def _normalize_selected_document_ids(value) -> list[int] | None:
-    """规范化前端传来的资料勾选范围。None 表示全库，[] 表示不检索。"""
+    """规范化前端传来的培训资料勾选范围。None 表示全库，[] 表示不检索。"""
     if value is None:
         return None
     if not isinstance(value, list):
@@ -86,7 +85,7 @@ def chat_ask(
     else:
         conv = Conversation(
             user_id=current_user.id,
-            agent_type=req.agent_type,
+            agent_type="edu",
             title=req.message[:30] if len(req.message) > 30 else req.message,
         )
         db.add(conv)
@@ -114,15 +113,12 @@ def chat_ask(
 
     async def _collect():
         nonlocal full_response, sources, agent_steps, evaluation
-        if req.agent_type == "edu":
-            stream = edu_chat_stream(
-                req.message,
-                current_user.id,
-                history[:-1],
-                selected_document_ids=selected_document_ids,
-            )
-        else:
-            stream = baoyan_chat_stream(req.message, current_user.id, history[:-1])
+        stream = edu_chat_stream(
+            req.message,
+            current_user.id,
+            history[:-1],
+            selected_document_ids=selected_document_ids,
+        )
 
         async for chunk in stream:
             if chunk["type"] == "thinking":
@@ -168,7 +164,7 @@ async def chat_websocket(websocket: WebSocket, user_id: int):
     """
     WebSocket流式对话
     消息格式（客户端→服务端）：
-      {"conversation_id": 1, "message": "...", "agent_type": "edu"}
+      {"conversation_id": 1, "message": "...", "selected_document_ids": [1, 2]}
 
     消息格式（服务端→客户端）：
       {"type": "thinking", "step": "..."}
@@ -188,7 +184,6 @@ async def chat_websocket(websocket: WebSocket, user_id: int):
 
             user_msg_text = req_data.get("message", "")
             conversation_id = req_data.get("conversation_id")
-            agent_type = req_data.get("agent_type", "edu")
             selected_document_ids = _normalize_selected_document_ids(
                 req_data.get("selected_document_ids")
             )
@@ -211,7 +206,7 @@ async def chat_websocket(websocket: WebSocket, user_id: int):
             else:
                 conv = Conversation(
                     user_id=user_id,
-                    agent_type=agent_type,
+                    agent_type="edu",
                     title=user_msg_text[:30] if len(user_msg_text) > 30 else user_msg_text,
                 )
                 db.add(conv)
@@ -237,15 +232,12 @@ async def chat_websocket(websocket: WebSocket, user_id: int):
             evaluation = None
             started_at = time.perf_counter()
 
-            if agent_type == "edu":
-                stream = edu_chat_stream(
-                    user_msg_text,
-                    user_id,
-                    history[:-1],
-                    selected_document_ids=selected_document_ids,
-                )
-            else:
-                stream = baoyan_chat_stream(user_msg_text, user_id, history[:-1])
+            stream = edu_chat_stream(
+                user_msg_text,
+                user_id,
+                history[:-1],
+                selected_document_ids=selected_document_ids,
+            )
 
             async for chunk in stream:
                 if chunk["type"] == "thinking":

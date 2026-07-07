@@ -4,8 +4,8 @@
     <aside class="sidebar">
       <!-- Logo -->
       <div class="sidebar-header" @click="handleNewChat">
-        <span class="logo">📚</span>
-        <span class="brand">EduAssistant</span>
+        <span class="logo">🏢</span>
+        <span class="brand">OnboardAgent</span>
       </div>
 
       <!-- 新建对话 -->
@@ -42,19 +42,18 @@
 
     <!-- ===== 右侧主区域 ===== -->
     <main class="main-area">
-      <!-- 顶部Agent切换栏 -->
+      <!-- 顶部助手栏 -->
       <header class="chat-header">
-        <n-radio-group :value="agentType" @update:value="switchAgent" size="large">
-          <n-radio-button value="edu" label="📖 教育助手">
-            <span>📖 教育助手</span>
-          </n-radio-button>
-          <n-radio-button value="baoyan" label="🎓 保研助手">
-            <span>🎓 保研助手</span>
-          </n-radio-button>
-        </n-radio-group>
+        <div class="assistant-title">
+          <span class="assistant-icon">🏢</span>
+          <div>
+            <strong>入职培训助手</strong>
+            <span>基于已选企业资料检索回答</span>
+          </div>
+        </div>
         <n-button text @click="openKnowledgeBase">
           <n-icon size="20"><folder-open-outline /></n-icon>
-          知识库
+          企业知识库
         </n-button>
       </header>
 
@@ -62,8 +61,8 @@
       <div class="message-area" ref="messageAreaRef">
         <!-- 空状态：预设问题卡片 -->
         <div v-if="messages.length === 0 && !isThinking" class="welcome">
-          <h2>{{ agentType === 'edu' ? '📖 你好，我是教育助手' : '🎓 你好，我是保研助手' }}</h2>
-          <p>{{ agentType === 'edu' ? '上传学习资料或直接提问，我会基于你的资料帮你学习' : '关于保研的任何问题，我都可以帮你解答' }}</p>
+          <h2>🏢 你好，我是入职培训助手</h2>
+          <p>上传员工手册、制度流程或岗位培训资料，我会基于公司资料答疑并标注来源</p>
           <div class="preset-cards">
             <div v-for="q in presetQuestions" :key="q" class="preset-card" @click="sendMessage(q)">
               {{ q }}
@@ -142,7 +141,7 @@
 
       <!-- 输入区域 -->
       <div class="input-area">
-        <div v-if="agentType === 'edu'" class="scope-bar">
+        <div class="scope-bar">
           <n-tag size="small" :type="selectedReadyFiles.length ? 'info' : 'warning'">
             检索范围：{{ selectedScopeLabel }}
           </n-tag>
@@ -152,11 +151,11 @@
           <span v-if="selectedScopeExtraCount > 0" class="scope-extra">
             +{{ selectedScopeExtraCount }}
           </span>
-          <n-button text size="tiny" @click="openKnowledgeBase">选择资料</n-button>
+          <n-button text size="tiny" @click="openKnowledgeBase">选择培训资料</n-button>
         </div>
         <n-input-group>
           <n-input v-model:value="inputText" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }"
-            placeholder="输入你的问题... (Enter发送，Shift+Enter换行)"
+            placeholder="输入入职、制度、流程或岗位培训问题... (Enter发送，Shift+Enter换行)"
             :disabled="isThinking"
             @keydown="handleKeydown"
             clearable />
@@ -167,18 +166,18 @@
       </div>
     </main>
 
-    <!-- ===== 知识库抽屉 ===== -->
+    <!-- ===== 企业知识库抽屉 ===== -->
     <n-drawer v-model:show="showFileDrawer" :width="400" placement="right">
-      <n-drawer-content title="📁 我的知识库">
+      <n-drawer-content title="📁 企业培训资料库">
         <n-upload multiple :max="5" accept=".pdf,.docx,.txt,.md" :custom-request="handleUpload"
           :disabled="uploading">
           <n-button :loading="uploading">
-            <n-icon><cloud-upload-outline /></n-icon> 上传文件
+            <n-icon><cloud-upload-outline /></n-icon> 上传培训资料
           </n-button>
         </n-upload>
         <n-divider />
         <div v-if="files.length === 0">
-          <n-empty description="还没有上传过文件" />
+          <n-empty description="还没有上传培训资料" />
         </div>
         <template v-else>
           <div class="file-select-toolbar">
@@ -203,11 +202,11 @@
             <n-thing :title="f.original_name" :description="`${formatSize(f.file_size)} · ${f.chunk_count}块 · ${f.created_at?.substring(0, 10)}`" />
             <template #suffix>
               <n-space vertical size="small">
-                <n-button size="tiny" ghost type="primary" :loading="toolLoading === `summary-${f.id}`" @click="summarizeFile(f)">
-                  摘要
+                <n-button size="tiny" ghost type="primary" :disabled="f.status !== 'ready'" :loading="toolLoading === `summary-${f.id}`" @click="summarizeFile(f)">
+                  制度速览
                 </n-button>
-                <n-button size="tiny" ghost type="info" :loading="toolLoading === `knowledge-${f.id}`" @click="extractKnowledge(f)">
-                  知识点
+                <n-button size="tiny" ghost type="info" :disabled="f.status !== 'ready'" :loading="toolLoading === `knowledge-${f.id}`" @click="extractKnowledge(f)">
+                  知识卡片
                 </n-button>
                 <n-button text type="error" @click="deleteFile(f.id)"><n-icon><trash-outline /></n-icon></n-button>
               </n-space>
@@ -227,12 +226,12 @@
           </div>
           <template #footer>
             <n-space>
-              <n-button v-if="toolResult.type === 'summary'" size="small" @click="copyToolResult">复制摘要</n-button>
+              <n-button v-if="toolResult.type === 'summary'" size="small" @click="copyToolResult">复制速览</n-button>
               <template v-else>
                 <n-button size="small" type="primary" ghost @click="downloadKnowledgeMarkdown">
                   <n-icon><download-outline /></n-icon> 导出 Markdown
                 </n-button>
-                <n-text depth="3">点击知识点可直接追问</n-text>
+                <n-text depth="3">点击知识卡片可直接追问</n-text>
               </template>
             </n-space>
           </template>
@@ -261,7 +260,6 @@ const nMessage = useMessage()
 const authStore = useAuthStore()
 
 // ===== 状态 =====
-const agentType = ref('edu')
 const conversations = ref([])
 const currentConvId = ref(null)
 const messages = ref([])
@@ -270,7 +268,6 @@ const isThinking = ref(false)
 const thinkingSteps = ref([])
 const files = ref([])
 const selectedFileIds = ref([])
-const selectionTouched = ref(false)
 const showFileDrawer = ref(false)
 const uploading = ref(false)
 const toolLoading = ref('')
@@ -281,30 +278,22 @@ let ws = null
 
 // 预设问题
 const eduPresets = [
-  '帮我总结这篇课文的核心内容',
-  '提取这一章节的重要知识点',
-  '这篇文章的结构是什么？',
-  '用简单的话解释这个概念',
-  '给我出几道关于这个知识点的题',
-  '帮我制定一个学习计划',
+  '入职第一周需要完成哪些事项？',
+  '试用期转正评估主要看什么？',
+  '请假和异常打卡应该怎么处理？',
+  '差旅报销需要注意哪些要求？',
+  '哪些公司数据不能外发或上传？',
+  '帮我整理新人必修培训清单',
 ]
-const baoyanPresets = [
-  '保研需要准备哪些材料？',
-  '计算机专业有哪些好学校推荐？',
-  '预推免和夏令营有什么区别？',
-  '如何选择导师？',
-  '保研面试一般问什么？',
-  '我的条件能保什么层次的学校？',
-]
-const presetQuestions = computed(() => agentType.value === 'edu' ? eduPresets : baoyanPresets)
+const presetQuestions = eduPresets
 const readyFiles = computed(() => files.value.filter((file) => file.status === 'ready'))
 const selectedReadyFiles = computed(() => readyFiles.value.filter((file) => selectedFileIds.value.includes(file.id)))
 const selectedScopePreview = computed(() => selectedReadyFiles.value.slice(0, 2))
 const selectedScopeExtraCount = computed(() => Math.max(0, selectedReadyFiles.value.length - selectedScopePreview.value.length))
 const selectedScopeLabel = computed(() => {
-  if (readyFiles.value.length === 0) return '暂无可用资料'
-  if (selectedReadyFiles.value.length === 0) return '未选择资料'
-  if (selectedReadyFiles.value.length === readyFiles.value.length) return `全部资料 (${readyFiles.value.length})`
+  if (readyFiles.value.length === 0) return '暂无可用培训资料'
+  if (selectedReadyFiles.value.length === 0) return '未选择培训资料'
+  if (selectedReadyFiles.value.length === readyFiles.value.length) return `全部培训资料 (${readyFiles.value.length})`
   return `已选 ${selectedReadyFiles.value.length} 份`
 })
 
@@ -399,13 +388,8 @@ async function deleteConversation(convId) {
   } catch { /* ignore */ }
 }
 
-function switchAgent(type) {
-  agentType.value = type
-  handleNewChat()
-}
-
 // ===== 消息发送 =====
-async function sendMessage(text) {
+async function sendMessage(text, options = {}) {
   const msg = text || inputText.value.trim()
   if (!msg || isThinking.value) return
 
@@ -417,11 +401,14 @@ async function sendMessage(text) {
   thinkingSteps.value = []
   scrollToBottom(true)
 
+  const hasScopeOverride = Object.prototype.hasOwnProperty.call(options, 'selectedDocumentIds')
+  const selectedDocumentIds = hasScopeOverride ? options.selectedDocumentIds : [...selectedFileIds.value]
+
   const payload = {
     conversation_id: currentConvId.value,
     message: msg,
-    agent_type: agentType.value,
-    selected_document_ids: agentType.value === 'edu' ? [...selectedFileIds.value] : undefined,
+    agent_type: 'edu',
+    selected_document_ids: selectedDocumentIds,
   }
 
   const sentByWs = ws?.send(payload)
@@ -481,7 +468,7 @@ async function handleUpload({ file, onFinish, onError }) {
     await api.post('/api/files/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
-    nMessage.success(`${file.name} 上传成功`)
+    nMessage.success(`${file.name} 上传成功，已加入培训资料库`)
     await loadFiles()
     onFinish()
   } catch (e) {
@@ -503,10 +490,6 @@ async function deleteFile(fileId) {
 
 function syncSelectedFiles() {
   const readyIds = readyFiles.value.map((file) => file.id)
-  if (!selectionTouched.value) {
-    selectedFileIds.value = [...readyIds]
-    return
-  }
   selectedFileIds.value = selectedFileIds.value.filter((id) => readyIds.includes(id))
 }
 
@@ -515,7 +498,6 @@ function isFileSelected(fileId) {
 }
 
 function toggleFileSelection(fileId, checked) {
-  selectionTouched.value = true
   if (checked) {
     if (!selectedFileIds.value.includes(fileId)) {
       selectedFileIds.value = [...selectedFileIds.value, fileId]
@@ -526,12 +508,10 @@ function toggleFileSelection(fileId, checked) {
 }
 
 function selectAllReadyFiles() {
-  selectionTouched.value = true
   selectedFileIds.value = readyFiles.value.map((file) => file.id)
 }
 
 function clearSelectedFiles() {
-  selectionTouched.value = true
   selectedFileIds.value = []
 }
 
@@ -544,11 +524,11 @@ async function summarizeFile(file) {
     })
     toolResult.value = {
       type: 'summary',
-      title: `${file.original_name} · 摘要`,
+      title: `${file.original_name} · 制度速览`,
       content: res.data.summary,
     }
   } catch (e) {
-    nMessage.error(e.response?.data?.detail || '摘要生成失败')
+    nMessage.error(e.response?.data?.detail || '制度速览生成失败')
   } finally {
     toolLoading.value = ''
   }
@@ -562,11 +542,12 @@ async function extractKnowledge(file) {
     })
     toolResult.value = {
       type: 'knowledge',
-      title: `${file.original_name} · 知识点`,
+      title: `${file.original_name} · 培训知识卡片`,
+      document_id: res.data.document_id || file.id,
       points: res.data.knowledge_points || [],
     }
   } catch (e) {
-    nMessage.error(e.response?.data?.detail || '知识点提取失败')
+    nMessage.error(e.response?.data?.detail || '培训知识卡片提取失败')
   } finally {
     toolLoading.value = ''
   }
@@ -575,7 +556,7 @@ async function extractKnowledge(file) {
 async function copyToolResult() {
   if (!toolResult.value?.content) return
   await navigator.clipboard.writeText(toolResult.value.content)
-  nMessage.success('摘要已复制')
+  nMessage.success('制度速览已复制')
 }
 
 function compactMarkdownText(value, maxLength = 0) {
@@ -622,7 +603,7 @@ function groupKnowledgePoints(points) {
   const groups = []
   const groupMap = new Map()
   points.forEach((point, index) => {
-    const category = compactMarkdownText(point.category) || '核心知识点'
+    const category = compactMarkdownText(point.category) || '核心培训知识'
     if (!groupMap.has(category)) {
       const group = { category, points: [] }
       groupMap.set(category, group)
@@ -648,15 +629,15 @@ function downloadKnowledgeMarkdown() {
   const groups = groupKnowledgePoints(points)
   const now = new Date().toLocaleString('zh-CN')
   let markdown = `# ${toolResult.value.title}\n\n`
-  markdown += `> 导出时间：${now}  |  共 ${points.length} 个知识点  |  ${groups.length} 个模块\n\n`
-  markdown += `## 文档概览\n\n`
-  markdown += `- 知识点数量：${points.length}\n`
+  markdown += `> 导出时间：${now}  |  共 ${points.length} 张培训知识卡片  |  ${groups.length} 个模块\n\n`
+  markdown += `## 资料概览\n\n`
+  markdown += `- 知识卡片数量：${points.length}\n`
   markdown += `- 模块结构：${groups.map((group) => group.category).join('、')}\n\n`
 
   for (const [groupIndex, group] of groups.entries()) {
     markdown += `## ${groupIndex + 1}. ${group.category}\n\n`
     for (const [pointIndex, point] of group.points.entries()) {
-      const title = compactMarkdownText(point.title) || `知识点 ${point.exportIndex}`
+      const title = compactMarkdownText(point.title) || `培训知识 ${point.exportIndex}`
       const description = compactMarkdownText(point.description)
       const keyPoints = asExportList(point.key_points)
       const examples = asExportList(point.examples)
@@ -666,8 +647,8 @@ function downloadKnowledgeMarkdown() {
       if (description) {
         markdown += `${description}\n\n`
       }
-      markdown = appendBulletList(markdown, `**复习要点：**`, keyPoints)
-      markdown = appendBulletList(markdown, `**可套用表达：**`, examples)
+      markdown = appendBulletList(markdown, `**新人需要知道：**`, keyPoints)
+      markdown = appendBulletList(markdown, `**制度原文或操作口径：**`, examples)
       if (excerpts.length) {
         markdown += `**原文依据：**\n\n`
         for (const excerpt of excerpts) {
@@ -691,14 +672,18 @@ function downloadKnowledgeMarkdown() {
 
 function askKnowledge(point) {
   showFileDrawer.value = false
-  sendMessage(`请围绕“${point.title}”展开讲解，并结合资料说明：${point.description}`)
+  const sourceDocumentId = toolResult.value?.document_id
+  sendMessage(
+    `请围绕“${point.title}”展开讲解，并结合资料说明：${point.description}`,
+    sourceDocumentId ? { selectedDocumentIds: [sourceDocumentId] } : {},
+  )
 }
 
 // ===== 工具 =====
 function inferStepTool(text) {
-  if (/(检索|文档片段|知识库|匹配)/.test(text)) return '知识库检索'
+  if (/(检索|文档片段|知识库|匹配)/.test(text)) return '企业知识检索'
   if (/(生成|回答)/.test(text)) return '回答生成'
-  if (/(分析|保研)/.test(text)) return '问题分析'
+  if (/分析/.test(text)) return '问题分析'
   return 'Agent'
 }
 
@@ -967,6 +952,37 @@ function handleLogout() {
   padding: 12px 20px;
   border-bottom: 1px solid #eee;
   background: #fafafa;
+}
+
+.assistant-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  color: #1f2937;
+}
+
+.assistant-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  background: #e8f0fe;
+  border-radius: 8px;
+  font-size: 20px;
+}
+
+.assistant-title strong {
+  display: block;
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.assistant-title span:last-child {
+  display: block;
+  margin-top: 2px;
+  color: #6b7280;
+  font-size: 12px;
 }
 
 /* ===== 消息区 ===== */

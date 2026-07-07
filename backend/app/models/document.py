@@ -1,5 +1,5 @@
 """
-文档模型 - 记录用户上传的学习资料
+文档模型 - 记录用户上传的企业培训资料
 """
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.sql import func

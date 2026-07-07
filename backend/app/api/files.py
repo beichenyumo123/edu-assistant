@@ -34,10 +34,13 @@ def infer_source_profile(filename: str, file_type: str) -> dict:
     name = (filename or "").lower()
 
     rules = [
-        ("teacher_note", "high", ["教师", "老师", "讲义", "note", "notes"]),
-        ("textbook", "high", ["教材", "课本", "textbook", "book"]),
-        ("courseware", "high", ["课件", "ppt", "slides", "courseware"]),
-        ("exercise", "medium", ["习题", "练习", "作业", "题库", "exercise", "homework"]),
+        ("employee_handbook", "high", ["员工手册", "新人手册", "入职手册", "handbook", "onboarding"]),
+        ("policy", "high", ["制度", "规章", "政策", "办法", "规范", "policy", "policies"]),
+        ("workflow", "high", ["流程", "报销", "审批", "请假", "差旅", "采购", "workflow", "process", "sop"]),
+        ("security", "high", ["信息安全", "数据安全", "保密", "权限", "账号", "security", "privacy"]),
+        ("compliance", "high", ["合规", "廉洁", "反舞弊", "行为准则", "compliance", "ethics"]),
+        ("training", "medium", ["培训", "课程", "课件", "讲义", "training", "courseware", "slides", "ppt"]),
+        ("product_doc", "medium", ["产品", "业务", "客户", "方案", "product", "business"]),
         ("web", "low", ["网页", "博客", "web", "blog"]),
     ]
 
@@ -45,7 +48,16 @@ def infer_source_profile(filename: str, file_type: str) -> dict:
         if any(keyword in name for keyword in keywords):
             return {"source_type": source_type, "trust_level": trust_level}
 
-    return {"source_type": "student_upload", "trust_level": "medium"}
+    return {"source_type": "enterprise_upload", "trust_level": "medium"}
+
+
+def _document_file_exists(doc: Document) -> bool:
+    """兼容历史数据：入库文件名或原始文件名任一存在即可读取。"""
+    candidates = [
+        os.path.join(settings.UPLOAD_DIR, doc.filename),
+        os.path.join(settings.UPLOAD_DIR, doc.original_name),
+    ]
+    return any(path and os.path.exists(path) for path in candidates)
 
 @router.post("/upload")
 async def upload_file(
@@ -53,7 +65,7 @@ async def upload_file(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """上传学习资料并自动向量化"""
+    """上传企业培训资料并自动向量化"""
     # 验证文件类型
     ext = validate_file(file.filename)
 
@@ -94,10 +106,7 @@ async def upload_file(
 
         # 文本分块
         chunks = split_text(text)
-        source_profile = {
-            "source_type": "student_upload",
-            "trust_level": "medium",
-        }
+        source_profile = infer_source_profile(doc.original_name, doc.file_type)
 
         # 存入ChromaDB（用user_id隔离）
         vectorstore = get_vectorstore(user_id=current_user.id)
@@ -141,7 +150,14 @@ def list_files(
         .order_by(Document.created_at.desc())
         .all()
     )
-    return {"files": [d.to_dict() for d in docs]}
+    files = []
+    for doc in docs:
+        item = doc.to_dict()
+        if doc.status == "ready" and not _document_file_exists(doc):
+            item["status"] = "error"
+            item["error_message"] = "资料文件缺失，请重新上传"
+        files.append(item)
+    return {"files": files}
 
 
 @router.delete("/{file_id}")

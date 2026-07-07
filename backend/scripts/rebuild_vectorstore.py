@@ -69,7 +69,7 @@ def rebuild_user_documents(user_id: int | None = None) -> None:
                                 "document_name": doc.original_name,
                                 "chunk_index": i,
                                 "file_type": doc.file_type,
-                                "source_type": "student_upload",
+                                "source_type": "enterprise_upload",
                                 "trust_level": "medium",
                             }
                             for i in range(len(chunks))

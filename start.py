@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-EduAssistant 一键启动脚本（跨平台：Windows / macOS / Linux）
+OnboardAgent 一键启动脚本（跨平台：Windows / macOS / Linux）
 
 用法：
     python start.py          # 启动前后端
@@ -296,7 +296,7 @@ def main() -> None:
     mode = sys.argv[1] if len(sys.argv) > 1 else "all"
 
     print(f"\n{GREEN}  ╔{'═' * 46}╗{NC}")
-    print(f"{GREEN}  ║{'EduAssistant 一键启动':^38}║{NC}")
+    print(f"{GREEN}  ║{'OnboardAgent 一键启动':^38}║{NC}")
     print(f"{GREEN}  ║{f'平台: {sys.platform}':^38}║{NC}")
     print(f"{GREEN}  ╚{'═' * 46}╝{NC}")
 
