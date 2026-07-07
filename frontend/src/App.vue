@@ -1,15 +1,18 @@
 <template>
-  <n-config-provider>
-    <n-message-provider>
-      <n-dialog-provider>
-        <router-view />
-      </n-dialog-provider>
-    </n-message-provider>
-  </n-config-provider>
+  <Cursor>
+    <n-config-provider :theme-overrides="themeOverrides">
+      <n-message-provider>
+        <n-dialog-provider>
+          <router-view />
+        </n-dialog-provider>
+      </n-message-provider>
+    </n-config-provider>
+  </Cursor>
 </template>
 
 <script setup>
-// App根组件 - 仅作为路由容器
+import { Cursor } from 'animal-island-vue'
+import { themeOverrides } from './theme/naiveOverrides'
 </script>
 
 <style>
@@ -20,9 +23,9 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  background: #f5f7fa;
-  color: #333;
+  font-family: var(--animal-font-family, Nunito, 'Noto Sans SC', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif);
+  background: var(--animal-bg-color, #f8f8f0);
+  color: var(--animal-text-color, #725d42);
 }
 
 #app {

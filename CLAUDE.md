@@ -4,109 +4,146 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-EduAssistant is a RAG + dual-agent intelligent learning assistant covering academic tutoring (`edu_agent`) and graduate school recommendation (`baoyan_agent`). It is in early skeleton phase (single initial commit, ~46 source files, no tests or linting configured).
+EduAssistant is a RAG + dual-agent intelligent learning assistant covering academic tutoring (`edu_agent`) and graduate school recommendation (`baoyan_agent`). Sprint1 all 34 tasks complete, awaiting end-to-end validation.
+
+**Stack**: FastAPI + SQLAlchemy 2.0 + SQLite + ChromaDB | Vue 3 + Vite + Naive UI + Pinia
 
 ## Commands
 
-### One-click start
+### One-click start (cross-platform)
 
 ```bash
 # macOS / Linux
 ./start.sh
 
-# Windows（双击 start.bat 或命令行运行）
+# Windows（双击或命令行）
 start.bat
 
-# 跨平台（任何装了 Python 的系统）
-python start.py
+# 所有平台
+python start.py              # 启动前后端
+python start.py backend       # 仅后端
+python start.py frontend      # 仅前端
 ```
 
-Starts both backend (:8000) and frontend (:5173) concurrently. Auto-creates venv, installs dependencies, and copies `.env.example` if needed. Ctrl+C stops both.
+All three enforce **Python 3.11** (project requirement). Auto-creates venv, installs deps, copies `.env.example`. Ctrl+C graceful shutdown.
 
-`start.py` also supports partial start:
-
-```bash
-python start.py backend   # 仅后端
-python start.py frontend  # 仅前端
-```
-
-### Backend (FastAPI + SQLAlchemy + SQLite)
+### Backend
 
 ```bash
 cd backend
+python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env          # edit with API keys
+cp .env.example .env            # edit API keys
 python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-API docs auto-served at `http://localhost:8000/docs` (Swagger UI).
+API docs: `http://localhost:8000/docs` (Swagger).
 
-Seed demo data: `cd backend && python scripts/seed_demo_knowledge.py`
+Seed demo data (idempotent, clears old records before reseeding):
 
-### Frontend (Vue 3 + Vite + Naive UI + Pinia)
+```bash
+cd backend && python scripts/seed_demo_knowledge.py
+```
+
+### Frontend
 
 ```bash
 cd frontend
 npm install
-npm run dev          # Vite dev server on :5173, proxies /api → :8000, /ws → ws://:8000
-npm run build        # production build → dist/
+npm run dev        # Vite dev server on :5173, proxies /api → :8000, /ws → ws://:8000
+npm run build      # production build → dist/
 ```
 
-### No tests or linting configured
-
-There are no test frameworks, linters, or formatters set up for either frontend or backend.
+### No tests or linting configured yet
 
 ## Architecture
 
 ### LLM gateway (`backend/app/agents/llm.py`)
 
-`get_llm()` is the single factory for all LLM access. It reads `LLM_PROVIDER` from `.env` and returns one of:
-- **ChatOpenAIGateway** wrapping `langchain_openai.ChatOpenAI` — used when a real API key is configured for DeepSeek or SiliconFlow (both speak OpenAI-compatible API).
-- **LocalDemoLLM** — offline fallback that returns deterministic, rule-based responses for summaries, knowledge extraction, and Q&A. Activated automatically when no valid API key is present. This ensures the full upload → RAG → chat flow works without internet.
+`get_llm()` is the single factory. Reads `LLM_PROVIDER` from `.env`, returns:
+- **ChatOpenAIGateway** wrapping `langchain_openai.ChatOpenAI` — for DeepSeek / SiliconFlow (both OpenAI-compatible)
+- **LocalDemoLLM** — offline fallback: deterministic responses for summaries, knowledge extraction, Q&A. Activated when no valid API key. Ensures full upload → RAG → chat flow works without internet.
 
-All agents and tools call `get_llm()` — never instantiate an LLM directly.
+`tools.py` wraps calls via `_safe_llm_invoke()` — returns `None` on failure, then falls back to local rule-based extraction (`_fallback_knowledge_points` / `_fallback_summary`). Never crash on LLM unavailability.
 
-### RAG pipeline (upload → retrieve → answer)
+### Embedding model (`backend/app/rag/embeddings.py`)
 
-1. **Upload** (`api/files.py`): file is saved to `uploads/`, then immediately parsed and chunked.
-2. **Parse** (`rag/loader.py`): `parse_file()` handles PDF (PyPDF2), Word (python-docx), TXT, Markdown. `split_text()` chunks by character count with overlap.
-3. **Store** (`rag/vectorstore.py`): `LocalVectorStore` is a **JSON-file-based keyword scorer**, not real ChromaDB. It uses token overlap + coverage scoring, not embeddings. Data stored per-user at `chroma_db/user_{user_id}_docs.json`. The API (`add_texts`, `similarity_search`, `delete`) is designed to be swappable with real ChromaDB later.
-4. **Retrieve** (`rag/retriever.py`): `retrieve_relevant_chunks()` queries the vector store and `format_retrieved_context()` builds the prompt context block.
-5. **Generate** (`agents/edu_agent.py`): `edu_chat_stream()` is an async generator that retrieves context, builds a prompt with the last 3 conversation rounds (6 messages), and streams LLM output token-by-token.
+`get_embeddings()` — single factory, `@lru_cache(maxsize=1)`. **Local-only** by default: `BAAI/bge-small-zh-v1.5` via `langchain_huggingface.HuggingFaceEmbeddings`, with `local_files_only=True`. Model is shared across upload vectorization and query retrieval (same vector space).
+
+### RAG pipeline
+
+1. **Upload** (`api/files.py`): file saved → parsed → chunked → vectorized in one pass
+2. **Parse** (`rag/loader.py`): `parse_file()` dispatches by extension. `_parse_pdf()` uses PyPDF2 then `_merge_pdf_lines()` to merge artificial line breaks back into natural paragraphs (detects sentence-ending punctuation). `split_text()` chunks by character count, preferring paragraph boundaries (`\n\n`) as cut points.
+3. **Store** (`rag/vectorstore.py`): `ChromaVectorStore` wraps `langchain_chroma.Chroma`. Collections named `user_{user_id}` for isolation. `add_texts()` uses deterministic IDs for idempotent inserts. `similarity_search()` and `similarity_search_with_score()` (returns cosine distance) both support `where` filtering.
+4. **Retrieve** (`rag/retriever.py`): `retrieve_relevant_chunks()` + `format_retrieved_context()` build the prompt context block.
+5. **Generate** (`agents/edu_agent.py`): `edu_chat_stream()` async generator — retrieves context, builds prompt from last 3 rounds (6 messages), streams LLM output.
 
 ### Dual-agent system
 
-- **edu_agent** (`agents/edu_agent.py`): tutoring agent that uses RAG — retrieves from user's uploaded documents before answering.
-- **baoyan_agent** (`agents/baoyan_agent.py`): graduate school advising agent — general LLM conversation without RAG.
+- **edu_agent** (`agents/edu_agent.py`): tutoring with RAG — retrieves from user docs before answering
+- **baoyan_agent** (`agents/baoyan_agent.py`): grad school advising — general LLM conversation, no RAG
 
-Both expose an `async generator` streaming interface. Agents are invoked from `api/chat.py`.
+Both expose async generator streaming. Invoked from `api/chat.py` (HTTP + WebSocket).
+
+### Tools API (`backend/app/api/tools.py`)
+
+`POST /api/tools/summarize` — document summary (short/medium/long). Falls back to local extraction if LLM unavailable.
+
+`POST /api/tools/extract-knowledge` — structured knowledge extraction:
+- Sends 12K chars to LLM with a detailed prompt asking for `{category, title, description, key_points, examples, source_excerpt}` JSON
+- Falls back to `_fallback_knowledge_points()` (rule-based from sentence splitting) if LLM fails
+- After extraction: searches ChromaDB per-point with `similarity_search_with_score`, filters by distance < 1.0 and document_id, deduplicates globally, extracts focused excerpts from chunks via `_focused_excerpt()` (keyword-overlap scoring on sentence units)
+- `_normalize_knowledge_point()` ensures backward compatibility with older JSON formats
 
 ### WebSocket streaming protocol
 
-Chat uses WebSocket at `/ws/chat/{user_id}` with JSON messages. The `ChatWebSocket` class (`frontend/src/utils/websocket.js`) handles connection, auto-reconnect (up to 5 attempts, exponential backoff), and dispatching by message type:
+Chat at `/ws/chat/{user_id}` with JSON messages:
 
 | `data.type` | Purpose |
 |-------------|---------|
-| `thinking` | Agent reasoning/planning visualization |
-| `token` | Streaming response token (appended to message) |
-| `done` | Response complete |
+| `thinking` | Agent reasoning step (tool_name + elapsed_ms) |
+| `token` | Streaming response token |
+| `done` | Response complete (includes sources + agent_steps) |
 | `error` | Error occurred |
-| `meta` | Metadata (conversation ID, etc.) |
+| `meta` | Conversation ID, initial metadata |
 
-The frontend falls back to HTTP POST `/api/chat/ask` if WebSocket fails.
+Frontend `ChatWebSocket` class (auto-reconnect: 5 attempts, exponential backoff). HTTP POST `/api/chat/ask` as fallback.
 
 ### Auth flow
 
-JWT-based: `backend/app/core/security.py` uses bcrypt + python-jose. The frontend axios instance (`utils/api.js`) attaches the token via interceptor and redirects to `/login` on 401. The Pinia `auth` store manages login/register/logout state. All protected API endpoints use the `get_current_user` dependency (pattern: copy from `api/auth.py`).
-
-### Key design decisions (do not change without reason)
-
-- **User data isolation**: vector store files are per-user (`user_{user_id}_docs.json`).
-- **Upload auto-vectorization**: file upload triggers immediate text extraction + chunking + storage — no separate "process" step.
-- **Conversation window**: last 3 rounds (6 messages) included in LLM context (`conversation_history[-6:]`).
-- **CORS**: only `localhost:5173` and `localhost:3000` allowed.
-- **Config**: all settings via `pydantic-settings` from `.env` — see `backend/app/core/config.py`.
+JWT: `bcrypt` (direct, no passlib) + `python-jose`. Frontend axios interceptor attaches token and redirects to `/login` on 401. Pinia `auth` store manages login/register/logout.
 
 ### Database
 
-SQLite via SQLAlchemy 2.0. Tables are auto-created on startup via `base.metadata.create_all()` in `core/database.py`. Four models: User, Conversation, Message, Document. Database file: `backend/edu_assistant.db`.
+SQLite via SQLAlchemy 2.0, auto-created on startup. Four models:
+
+| Model | Notable columns |
+|-------|----------------|
+| User | username, hashed_password |
+| Conversation | user_id, title, agent_type |
+| Message | conversation_id, role, content, sources (JSON), **agent_steps** (JSON), **evaluation** (JSON) |
+| Document | user_id, filename, original_name, file_type, chunk_count, status |
+
+### Key design decisions (do not change without reason)
+
+- **Python 3.11 required** — enforced by `start.sh` / `start.bat`
+- **Local embedding model** — `BAAI/bge-small-zh-v1.5`, shared instance for upload + query, no API key needed
+- **User data isolation**: per-user ChromaDB collections (`user_{user_id}`), per-user document records
+- **Upload auto-vectorization**: no separate "process" step — file upload triggers immediate text extraction + chunking + vector store
+- **Conversation window**: last 3 rounds (6 messages) in LLM context (`conversation_history[-6:]`)
+- **Agent steps persistence**: thinking steps saved as JSON in `messages.agent_steps`, rendered as collapsible panel inside assistant message bubbles — survives page refresh and history reload
+- **Smart scroll**: during streaming, only auto-scroll when user is within 50px of bottom; user scrolls up → no auto-scroll
+- **LLM fallback everywhere**: `tools.py`, `edu_agent.py` all degrade gracefully when LLM is unavailable
+- **CORS**: `localhost:5173` and `localhost:3000`
+- **Config**: all settings via `pydantic-settings` from `.env` — see `backend/app/core/config.py`
+
+### Frontend structure
+
+Single-page app in `frontend/src/`:
+- `views/ChatView.vue` — main chat view (sidebar + message area + knowledge drawer + input). Contains all scroll logic, WebSocket wiring, file upload, summary/knowledge extraction UI, and markdown export
+- `views/LoginView.vue` — login/register forms
+- `stores/auth.js` — Pinia auth store
+- `stores/chat.js` — Pinia chat store (messages, thinking state)
+- `utils/api.js` — axios instance with JWT interceptor
+- `utils/websocket.js` — `ChatWebSocket` class
+- `utils/markdown.js` — markdown-it renderer with highlight.js

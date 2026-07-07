@@ -9,18 +9,20 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "vue": "^3.4.0",
-    "vue-router": "^4.3.0",
-    "pinia": "^2.1.0",
-    "naive-ui": "^2.38.0",
     "@vicons/ionicons5": "^0.13.0",
-    "axios": "^1.6.0",
     "@vueuse/core": "^10.7.0",
+    "axios": "^1.6.0",
+    "animal-island-vue": "file:./vendor/animal-island-vue",
+    "highlight.js": "^11.9.0",
     "markdown-it": "^14.0.0",
-    "highlight.js": "^11.9.0"
+    "naive-ui": "^2.38.0",
+    "pinia": "^2.1.0",
+    "vue": "^3.4.0",
+    "vue-router": "^4.3.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.0",
+    "less": "^4.6.7",
     "vite": "^5.1.0"
   }
 }

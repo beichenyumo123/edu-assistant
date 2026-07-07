@@ -1,0 +1,155 @@
+/* ================================================================
+ * Naive UI 组件 CSS 修正 — 动物森友会风格
+ *
+ * 处理无法通过 themeOverrides token 完全覆盖的 Naive UI 组件样式。
+ * 必须在 import 'animal-island-vue/style' 之后引入。
+ * ================================================================ */
+
+/* ── 抽屉头部背景 ── */
+.n-drawer .n-drawer-header {
+  background: var(--animal-bg-color, #f8f8f0) !important;
+  border-bottom-color: var(--animal-border-color-light, #e8e2d6) !important;
+}
+
+.n-drawer .n-drawer-footer {
+  border-top-color: var(--animal-border-color-light, #e8e2d6) !important;
+}
+
+/* ── 上传拖拽区 ── */
+.n-upload .n-upload-dragger {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.n-upload .n-upload-dragger:hover {
+  transform: translateY(-1px);
+}
+
+/* ── 消息提示：覆盖默认蓝色为薄荷绿 ── */
+.n-message.n-message--success .n-message__icon {
+  color: #6fba2c !important;
+}
+
+.n-message.n-message--error .n-message__icon {
+  color: #e05a5a !important;
+}
+
+.n-message.n-message--warning .n-message__icon {
+  color: #f5c31c !important;
+}
+
+.n-message.n-message--info .n-message__icon {
+  color: #19c8b9 !important;
+}
+
+/* ── 通知 icon ── */
+.n-notification.n-notification--success .n-notification__icon {
+  color: #6fba2c !important;
+}
+
+.n-notification.n-notification--error .n-notification__icon {
+  color: #e05a5a !important;
+}
+
+.n-notification.n-notification--warning .n-notification__icon {
+  color: #f5c31c !important;
+}
+
+.n-notification.n-notification--info .n-notification__icon {
+  color: #19c8b9 !important;
+}
+
+/* ── Dialog/Modal 按钮区域 ── */
+.n-dialog .n-dialog__action > button {
+  border-radius: 50px !important;
+}
+
+/* ── Popconfirm 按钮 ── */
+.n-popconfirm .n-popconfirm__action > button {
+  border-radius: 50px !important;
+}
+
+/* ── 输入框 placeholder 颜色加强 ── */
+.n-input .n-input__placeholder span {
+  color: #c4b89e !important;
+}
+
+/* ── Switch 增强 ── */
+.n-switch.n-switch--active .n-switch__rail {
+  background: #86d67a !important;
+}
+
+/* ── Tag 去掉默认冷色调 ── */
+.n-tag .n-tag__border {
+  border-radius: 16px;
+}
+
+/* ── n-thing（文件列表项） ── */
+.n-thing .n-thing-header__title {
+  color: var(--animal-text-color, #794f27);
+}
+
+.n-thing .n-thing-main__description {
+  color: var(--animal-text-color-secondary, #9f927d);
+}
+
+/* ── Tooltip 覆写 ── */
+.n-tooltip {
+  border-radius: 16px !important;
+}
+
+/* ── 全局滚动条 ── */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c4b89e;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9f927d;
+}
+
+/* ── 选中文本颜色 ── */
+::selection {
+  background: rgba(25, 200, 185, 0.2);
+  color: #794f27;
+}
+
+/* ── 聚焦样式覆盖：蓝色 → 黄色 ── */
+.n-input:not(.n-input--disabled) .n-input__input-el:focus,
+.n-input:not(.n-input--disabled) .n-input__textarea-el:focus {
+  border-color: #ffcc00 !important;
+}
+
+/* ── Radio button group (Agent 切换) ── */
+.n-radio-group .n-radio-button.n-radio-button--checked {
+  background: #19c8b9 !important;
+  border-color: #19c8b9 !important;
+  color: #fff9e3 !important;
+}
+
+.n-radio-group .n-radio-button {
+  border-color: #e8e2d6 !important;
+  color: #9f927d !important;
+  border-radius: 24px !important;
+}
+
+.n-radio-group .n-radio-button:hover:not(.n-radio-button--disabled) {
+  color: #19c8b9 !important;
+}
+
+/* ── 确保 transition 动画有圆角过渡 ── */
+.n-radio-group .n-radio-group--button-group .n-radio-button:first-child {
+  border-radius: 24px 0 0 24px !important;
+}
+
+.n-radio-group .n-radio-group--button-group .n-radio-button:last-child {
+  border-radius: 0 24px 24px 0 !important;
+}
