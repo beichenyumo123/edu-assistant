@@ -11,7 +11,7 @@
           <h1>让新人培训资料真正参与答疑</h1>
           <p>上传员工手册、制度流程和岗位培训资料，生成带来源的入职问答。</p>
         </div>
-        <div class="feature-grid">
+        <div class="feature-grid" aria-label="产品能力">
           <div class="feature-item">
             <strong>制度驱动</strong>
             <span>基于企业知识库回答</span>
@@ -161,22 +161,23 @@ async function handleRegister() {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  padding: 32px;
+  padding: 28px;
   background:
-    linear-gradient(180deg, rgba(20, 184, 166, 0.08), rgba(37, 99, 235, 0.05)),
-    #f6f9fc;
+    linear-gradient(140deg, rgba(255, 255, 255, 0.96) 0%, rgba(240, 244, 248, 0.92) 48%, rgba(229, 236, 244, 0.88) 100%),
+    #f6f8fb;
 }
 
 .login-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) 440px;
-  width: min(1040px, 100%);
-  min-height: 620px;
+  grid-template-columns: minmax(0, 1.08fr) minmax(400px, 0.62fr);
+  width: min(1360px, 100%);
+  min-height: calc(100vh - 56px);
   overflow: hidden;
-  background: #fff;
-  border: 1px solid #dbe7f3;
-  border-radius: 24px;
-  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(198, 210, 224, 0.72);
+  border-radius: 32px;
+  box-shadow: 0 34px 90px rgba(37, 48, 66, 0.14);
+  backdrop-filter: blur(30px);
 }
 
 .brand-panel {
@@ -184,24 +185,11 @@ async function handleRegister() {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 48px;
+  padding: clamp(44px, 6vw, 84px);
   overflow: hidden;
   background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(20, 184, 166, 0.10)),
-    #eef7fb;
-}
-
-.brand-panel::after {
-  content: '';
-  position: absolute;
-  right: -76px;
-  bottom: -82px;
-  z-index: 0;
-  width: 280px;
-  height: 280px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(37, 99, 235, 0.16), rgba(20, 184, 166, 0.08) 48%, transparent 70%);
-  pointer-events: none;
+    linear-gradient(160deg, rgba(255, 255, 255, 0.88), rgba(239, 244, 249, 0.72)),
+    #f5f7fa;
 }
 
 .brand-mark {
@@ -209,143 +197,232 @@ async function handleRegister() {
   z-index: 1;
   display: inline-flex;
   align-items: center;
-  gap: 12px;
-  color: #0f172a;
+  gap: 14px;
+  color: #111827;
   font-size: 18px;
   font-weight: 700;
+  animation: fade-up 0.45s ease-in-out both;
 }
 
 .logo-badge,
 .mobile-logo {
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   color: #fff;
-  background: #2563eb;
-  border-radius: 12px;
+  background: #111827;
+  border-radius: 14px;
   font-size: 16px;
   font-weight: 800;
+  box-shadow: 0 16px 34px rgba(17, 24, 39, 0.18);
 }
 
 .brand-copy {
   position: relative;
   z-index: 1;
-  max-width: 480px;
+  max-width: 780px;
+  animation: fade-up 0.52s 0.05s ease-in-out both;
 }
 
 .eyebrow {
-  margin: 0 0 14px;
-  color: #14b8a6;
-  font-size: 13px;
-  font-weight: 800;
+  margin: 0 0 22px;
+  color: #667085;
+  font-size: 14px;
+  font-weight: 700;
   letter-spacing: 0;
 }
 
 .brand-copy h1 {
+  max-width: 760px;
   margin: 0;
-  color: #0f172a;
-  font-size: 44px;
-  line-height: 1.16;
+  color: #0b1220;
+  font-size: clamp(52px, 7vw, 86px);
+  font-weight: 800;
+  line-height: 0.98;
+  letter-spacing: 0;
 }
 
 .brand-copy p:last-child {
-  margin: 18px 0 0;
-  color: #52637a;
-  font-size: 17px;
-  line-height: 1.7;
+  max-width: 620px;
+  margin: 28px 0 0;
+  color: #4b5563;
+  font-size: 19px;
+  font-weight: 300;
+  line-height: 1.85;
 }
 
 .feature-grid {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  max-width: 460px;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1fr);
+  gap: 18px;
+  max-width: 720px;
+  animation: fade-up 0.56s 0.12s ease-in-out both;
 }
 
 .feature-item {
-  padding: 16px;
-  background: #fff;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 14px;
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+  min-height: 112px;
+  padding: 22px 24px;
+  background: rgba(255, 255, 255, 0.48);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(45, 58, 78, 0.08);
+  backdrop-filter: blur(22px);
+  transition: transform 0.35s ease-in-out, border-color 0.35s ease-in-out, box-shadow 0.35s ease-in-out;
+}
+
+.feature-item:nth-child(2),
+.feature-item:nth-child(4) {
+  transform: translateY(18px);
+}
+
+.feature-item:hover {
+  transform: translateY(-4px);
+  border-color: rgba(17, 24, 39, 0.12);
+  box-shadow: 0 30px 70px rgba(45, 58, 78, 0.12);
+}
+
+.feature-item:nth-child(2):hover,
+.feature-item:nth-child(4):hover {
+  transform: translateY(10px);
 }
 
 .feature-item strong {
   display: block;
-  color: #0f172a;
-  font-size: 16px;
-  margin-bottom: 6px;
+  color: #111827;
+  font-size: 18px;
+  margin-bottom: 10px;
 }
 
 .feature-item span {
-  color: #64748b;
-  font-size: 13px;
+  color: #667085;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .login-card {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 48px 42px;
-  background: #fff;
+  padding: clamp(34px, 4vw, 58px);
+  background: rgba(255, 255, 255, 0.78);
+  border-left: 1px solid rgba(198, 210, 224, 0.58);
+  backdrop-filter: blur(26px);
+  animation: fade-up 0.48s 0.08s ease-in-out both;
 }
 
 .login-header {
-  margin-bottom: 26px;
+  margin-bottom: 30px;
 }
 
 .mobile-logo {
   display: none;
-  margin-bottom: 18px;
+  margin-bottom: 22px;
 }
 
 .login-header h2 {
-  margin: 0 0 8px;
-  color: #0f172a;
-  font-size: 30px;
-  line-height: 1.2;
+  margin: 0 0 12px;
+  color: #111827;
+  font-size: 38px;
+  font-weight: 800;
+  line-height: 1.12;
 }
 
 .login-header p {
-  color: #64748b;
+  color: #667085;
   margin: 0;
-  font-size: 15px;
+  font-size: 16px;
+  line-height: 1.7;
 }
 
 .auth-form {
-  margin-top: 22px;
+  margin-top: 26px;
+}
+
+.auth-form :deep(.n-input) {
+  border-radius: 16px;
+  transition: box-shadow 0.35s ease-in-out, transform 0.35s ease-in-out;
+}
+
+.auth-form :deep(.n-input:hover),
+.auth-form :deep(.n-input.n-input--focus) {
+  box-shadow: 0 18px 38px rgba(37, 48, 66, 0.08);
+}
+
+.auth-form :deep(.n-button) {
+  height: 48px;
+  border-radius: 999px;
+  font-size: 16px;
+  font-weight: 700;
+  transition: transform 0.32s ease-in-out, box-shadow 0.32s ease-in-out;
+}
+
+.auth-form :deep(.n-button:hover) {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 36px rgba(24, 24, 27, 0.16);
 }
 
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 14px;
 }
 
 .login-footer {
-  text-align: center;
-  margin-top: 22px;
+  text-align: left;
+  margin-top: 26px;
 }
 
-@media (max-width: 860px) {
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 980px) {
   .login-page {
-    padding: 18px;
+    padding: 16px;
+    align-items: flex-start;
   }
 
   .login-shell {
     grid-template-columns: 1fr;
     min-height: auto;
+    border-radius: 24px;
   }
 
   .brand-panel {
-    display: none;
+    min-height: 48vh;
+    padding: 38px 26px;
+  }
+
+  .brand-copy h1 {
+    font-size: clamp(46px, 14vw, 68px);
+  }
+
+  .feature-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .feature-item,
+  .feature-item:nth-child(2),
+  .feature-item:nth-child(4) {
+    min-height: auto;
+    transform: none;
   }
 
   .login-card {
-    padding: 34px 24px;
+    padding: 34px 24px 38px;
+    border-left: 0;
+    border-top: 1px solid rgba(198, 210, 224, 0.58);
   }
 
   .mobile-logo {

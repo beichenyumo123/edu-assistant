@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 from ..core.database import get_db
 from ..core.security import hash_password, verify_password, create_access_token, decode_access_token
 from ..models.user import User
-from ..schemas.auth import RegisterRequest, LoginRequest, TokenResponse
+from ..schemas.auth import RegisterRequest, LoginRequest, TokenResponse, UserUpdateRequest
+from ..services.default_documents import ensure_default_onboarding_document
 
 router = APIRouter(prefix="/api/auth", tags=["认证"])
 security = HTTPBearer()
@@ -55,6 +56,13 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
+    # 新用户默认带入企业入职培训手册，方便开箱即用。
+    # 初始化失败不阻断注册，避免默认资料缺失影响账号创建。
+    try:
+        ensure_default_onboarding_document(db, user)
+    except Exception as exc:
+        print(f"默认入职培训资料初始化失败: {exc}")
+
     # 生成Token
     token = create_access_token(data={"sub": str(user.id), "username": user.username})
     return TokenResponse(access_token=token, user=user.to_dict())
@@ -74,4 +82,49 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 @router.get("/me")
 def get_me(current_user: User = Depends(get_current_user)):
     """获取当前登录用户信息"""
+    return {"user": current_user.to_dict()}
+
+
+@router.put("/me")
+def update_me(
+    req: UserUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """更新当前登录用户信息"""
+    username = req.username.strip()
+    email = req.email.strip()
+    grade = req.grade.strip() if req.grade else None
+    major = req.major.strip() if req.major else None
+
+    if not username:
+        raise HTTPException(status_code=400, detail="用户名不能为空")
+    if not email:
+        raise HTTPException(status_code=400, detail="邮箱不能为空")
+    if "@" not in email or "." not in email:
+        raise HTTPException(status_code=400, detail="邮箱格式不正确")
+
+    existing_username = (
+        db.query(User)
+        .filter(User.username == username, User.id != current_user.id)
+        .first()
+    )
+    if existing_username:
+        raise HTTPException(status_code=400, detail="用户名已被使用")
+
+    existing_email = (
+        db.query(User)
+        .filter(User.email == email, User.id != current_user.id)
+        .first()
+    )
+    if existing_email:
+        raise HTTPException(status_code=400, detail="邮箱已被使用")
+
+    current_user.username = username
+    current_user.email = email
+    current_user.grade = grade
+    current_user.major = major
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
     return {"user": current_user.to_dict()}

@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .core.config import settings
 from .core.database import init_db
-from .api import auth, files, chat, conversations, tools
+from .api import auth, files, chat, conversations, tools, memory
 from .rag.embeddings import preload_embeddings
 
 
@@ -49,6 +49,7 @@ app.include_router(files.router)
 app.include_router(chat.router)
 app.include_router(conversations.router)
 app.include_router(tools.router)
+app.include_router(memory.router)
 
 
 @app.get("/")

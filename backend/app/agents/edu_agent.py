@@ -28,6 +28,7 @@ async def edu_chat_stream(
     user_id: int,
     conversation_history: list = None,
     selected_document_ids: list[int] | None = None,
+    memory_context: str | None = None,
 ) -> AsyncGenerator[Dict, None]:
     """入职培训助手流式对话。"""
     if selected_document_ids is not None:
@@ -57,6 +58,9 @@ async def edu_chat_stream(
 
 历史对话：
 {history_text or "（无）"}
+
+用户记忆：
+{memory_context or "（暂无稳定偏好）"}
 
 参考资料：
 {context}

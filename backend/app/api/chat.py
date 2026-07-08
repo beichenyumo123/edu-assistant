@@ -13,6 +13,7 @@ from ..models.conversation import Conversation
 from ..models.message import Message
 from ..schemas.chat import ChatRequest
 from ..agents.edu_agent import edu_chat_stream
+from ..services.user_memory import build_memory_context, record_memory_interaction
 from .auth import get_current_user
 
 router = APIRouter(tags=["对话"])
@@ -101,6 +102,7 @@ def chat_ask(
     # 获取历史上下文
     history = _get_history(conv.id, db)
     selected_document_ids = _normalize_selected_document_ids(req.selected_document_ids)
+    memory_context = build_memory_context(db, current_user)
 
     # 收集Agent流式输出
     full_response = ""
@@ -118,6 +120,7 @@ def chat_ask(
             current_user.id,
             history[:-1],
             selected_document_ids=selected_document_ids,
+            memory_context=memory_context,
         )
 
         async for chunk in stream:
@@ -143,6 +146,13 @@ def chat_ask(
     )
     conv.updated_at = datetime.utcnow()
     db.add(ai_msg)
+    record_memory_interaction(
+        db,
+        current_user,
+        req.message,
+        selected_document_ids,
+        sources,
+    )
     db.commit()
 
     return {
@@ -224,6 +234,7 @@ async def chat_websocket(websocket: WebSocket, user_id: int):
 
             # 获取历史
             history = _get_history(conv.id, db)
+            memory_context = build_memory_context(db, user)
 
             # 流式推送Agent回复
             full_response = ""
@@ -237,6 +248,7 @@ async def chat_websocket(websocket: WebSocket, user_id: int):
                 user_id,
                 history[:-1],
                 selected_document_ids=selected_document_ids,
+                memory_context=memory_context,
             )
 
             async for chunk in stream:
@@ -272,6 +284,13 @@ async def chat_websocket(websocket: WebSocket, user_id: int):
             )
             conv.updated_at = datetime.utcnow()
             db.add(ai_msg)
+            record_memory_interaction(
+                db,
+                user,
+                user_msg_text,
+                selected_document_ids,
+                sources,
+            )
             db.commit()
 
     except WebSocketDisconnect:

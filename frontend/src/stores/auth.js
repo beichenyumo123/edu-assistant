@@ -34,11 +34,17 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function updateProfile(data) {
+    const res = await api.put('/api/auth/me', data)
+    user.value = res.data.user
+    return res.data.user
+  }
+
   function logout() {
     token.value = ''
     user.value = null
     localStorage.removeItem('token')
   }
 
-  return { user, token, isLoggedIn, login, register, fetchUser, logout }
+  return { user, token, isLoggedIn, login, register, fetchUser, updateProfile, logout }
 })

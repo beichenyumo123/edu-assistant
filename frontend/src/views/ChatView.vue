@@ -4,7 +4,7 @@
     <aside class="sidebar">
       <!-- Logo -->
       <div class="sidebar-header" @click="handleNewChat">
-        <span class="logo">🏢</span>
+        <span class="logo">OA</span>
         <span class="brand">OnboardAgent</span>
       </div>
 
@@ -34,9 +34,17 @@
 
       <!-- 底部用户区 -->
       <div class="sidebar-footer">
-        <n-button text @click="handleLogout">
-          <n-icon><log-out-outline /></n-icon> 退出
-        </n-button>
+        <button class="profile-btn" type="button" @click="openProfileDrawer">
+          <span class="profile-avatar">{{ userInitials }}</span>
+          <span class="profile-meta">
+            <strong>{{ authStore.user?.username || '用户' }}</strong>
+            <small>{{ profileRoleLabel }}</small>
+          </span>
+        </button>
+        <button class="logout-btn" type="button" @click="handleLogout">
+          <n-icon size="18"><log-out-outline /></n-icon>
+          <span>退出登录</span>
+        </button>
       </div>
     </aside>
 
@@ -45,24 +53,39 @@
       <!-- 顶部助手栏 -->
       <header class="chat-header">
         <div class="assistant-title">
-          <span class="assistant-icon">🏢</span>
+          <span class="assistant-icon">OA</span>
           <div>
             <strong>入职培训助手</strong>
             <span>基于已选企业资料检索回答</span>
           </div>
         </div>
-        <n-button text @click="openKnowledgeBase">
-          <n-icon size="20"><folder-open-outline /></n-icon>
-          企业知识库
-        </n-button>
+        <div class="header-actions">
+          <n-button text @click="openMemoryDrawer">
+            <n-icon size="20"><sparkles-outline /></n-icon>
+            AI 记忆
+          </n-button>
+          <n-button text @click="openKnowledgeBase">
+            <n-icon size="20"><folder-open-outline /></n-icon>
+            企业知识库
+          </n-button>
+        </div>
       </header>
 
       <!-- 消息区域 -->
       <div class="message-area" ref="messageAreaRef">
         <!-- 空状态：预设问题卡片 -->
         <div v-if="messages.length === 0 && !isThinking" class="welcome">
-          <h2>🏢 你好，我是入职培训助手</h2>
-          <p>上传员工手册、制度流程或岗位培训资料，我会基于公司资料答疑并标注来源</p>
+          <div class="welcome-copy">
+            <span class="welcome-kicker">Enterprise onboarding workspace</span>
+            <h2>让入职问题带着资料回答</h2>
+            <p>选择员工手册、制度流程或岗位培训资料后，系统会优先检索已选范围，并把可追溯来源带回回答中。</p>
+          </div>
+          <div class="welcome-actions">
+            <n-button type="primary" round size="large" @click="openKnowledgeBase">
+              <n-icon><folder-open-outline /></n-icon>
+              选择培训资料
+            </n-button>
+          </div>
           <div class="preset-cards">
             <div v-for="q in presetQuestions" :key="q" class="preset-card" @click="sendMessage(q)">
               {{ q }}
@@ -72,7 +95,7 @@
 
         <!-- 消息列表 -->
         <div v-for="(msg, idx) in messages" :key="idx" class="msg-row" :class="msg.role">
-          <div class="msg-avatar">{{ msg.role === 'user' ? '👤' : '🤖' }}</div>
+          <div class="msg-avatar">{{ msg.role === 'user' ? 'ME' : 'AI' }}</div>
           <div class="msg-bubble">
             <div v-if="msg.role === 'assistant'" class="msg-content" v-html="renderMarkdown(msg.content)" />
             <div v-else class="msg-content">{{ msg.content }}</div>
@@ -167,8 +190,8 @@
     </main>
 
     <!-- ===== 企业知识库抽屉 ===== -->
-    <n-drawer v-model:show="showFileDrawer" :width="400" placement="right">
-      <n-drawer-content title="📁 企业培训资料库">
+    <n-drawer v-model:show="showFileDrawer" :width="460" placement="right">
+      <n-drawer-content title="企业培训资料库">
         <n-upload multiple :max="5" accept=".pdf,.docx,.txt,.md" :custom-request="handleUpload"
           :disabled="uploading">
           <n-button :loading="uploading">
@@ -238,6 +261,152 @@
         </n-card>
       </n-drawer-content>
     </n-drawer>
+
+    <!-- ===== AI 记忆抽屉 ===== -->
+    <n-drawer v-model:show="showMemoryDrawer" :width="420" placement="right">
+      <n-drawer-content title="AI 记忆">
+        <n-spin :show="memoryLoading">
+          <div class="memory-panel">
+            <section class="memory-hero">
+              <div class="memory-symbol">
+                <n-icon size="22"><sparkles-outline /></n-icon>
+              </div>
+              <div>
+                <p>Personalized Context</p>
+                <h3>个性化使用画像</h3>
+              </div>
+            </section>
+
+            <div class="memory-stats">
+              <div class="memory-stat">
+                <span>记录问题</span>
+                <strong>{{ userMemory?.question_count || 0 }}</strong>
+              </div>
+              <div class="memory-stat">
+                <span>记忆状态</span>
+                <strong>{{ userMemory?.memory_enabled === false ? '已关闭' : '已开启' }}</strong>
+              </div>
+            </div>
+
+            <div class="memory-section memory-settings">
+              <span class="memory-label">用户可控设置</span>
+              <div class="memory-setting-row">
+                <div>
+                  <strong>启用 AI 记忆</strong>
+                  <small>开启后系统会记录稳定偏好并用于后续回答</small>
+                </div>
+                <n-switch v-model:value="memoryForm.memory_enabled" />
+              </div>
+              <n-form class="memory-form" label-placement="top">
+                <n-form-item label="回答风格">
+                  <n-select
+                    v-model:value="memoryForm.preferred_answer_style"
+                    :options="answerStyleOptions"
+                    :disabled="!memoryForm.memory_enabled"
+                  />
+                </n-form-item>
+                <n-form-item label="沟通语气">
+                  <n-select
+                    v-model:value="memoryForm.communication_tone"
+                    :options="communicationToneOptions"
+                    :disabled="!memoryForm.memory_enabled"
+                  />
+                </n-form-item>
+                <n-button type="primary" block :loading="memorySaving" @click="saveMemorySettings">
+                  保存记忆设置
+                </n-button>
+              </n-form>
+            </div>
+
+            <div class="memory-section">
+              <span class="memory-label">基础画像</span>
+              <div class="memory-profile">
+                <div>
+                  <small>部门</small>
+                  <strong>{{ userMemory?.department || '未填写' }}</strong>
+                </div>
+                <div>
+                  <small>岗位</small>
+                  <strong>{{ userMemory?.role || '未填写' }}</strong>
+                </div>
+                <div>
+                  <small>沟通语气</small>
+                  <strong>{{ userMemory?.communication_tone || '专业清晰' }}</strong>
+                </div>
+              </div>
+            </div>
+
+            <div class="memory-section">
+              <span class="memory-label">常问主题</span>
+              <div v-if="memoryTopics.length" class="memory-tags">
+                <span v-for="topic in memoryTopics" :key="topic.name" class="memory-tag">
+                  {{ topic.name }} · {{ topic.count }}
+                </span>
+              </div>
+              <n-empty v-else description="暂无主题记忆" size="small" />
+            </div>
+
+            <div class="memory-section">
+              <span class="memory-label">常用资料</span>
+              <div v-if="memoryDocuments.length" class="memory-docs">
+                <div v-for="doc in memoryDocuments" :key="doc.name" class="memory-doc">
+                  <span>{{ doc.name }}</span>
+                  <small>{{ doc.count }} 次</small>
+                </div>
+              </div>
+              <n-empty v-else description="暂无资料偏好" size="small" />
+            </div>
+
+            <div class="memory-section" v-if="userMemory?.last_question">
+              <span class="memory-label">最近一次问题</span>
+              <p class="memory-last-question">{{ userMemory.last_question }}</p>
+            </div>
+
+            <div class="memory-actions">
+              <n-button block secondary :disabled="!userMemory?.question_count" @click="clearMemory">
+                清空 AI 记忆
+              </n-button>
+            </div>
+          </div>
+        </n-spin>
+      </n-drawer-content>
+    </n-drawer>
+
+    <!-- ===== 个人信息抽屉 ===== -->
+    <n-drawer v-model:show="showProfileDrawer" :width="420" placement="right">
+      <n-drawer-content title="个人信息">
+        <div class="profile-panel">
+          <section class="profile-hero">
+            <div class="profile-hero-avatar">{{ userInitials }}</div>
+            <div>
+              <p>Account Profile</p>
+              <h3>{{ authStore.user?.username || '用户' }}</h3>
+              <span>{{ profileRoleLabel }}</span>
+            </div>
+          </section>
+
+          <n-form class="profile-form" @submit.prevent="saveProfile">
+            <n-form-item label="用户名">
+              <n-input v-model:value="profileForm.username" size="large" placeholder="请输入用户名" clearable />
+            </n-form-item>
+            <n-form-item label="邮箱">
+              <n-input v-model:value="profileForm.email" size="large" placeholder="请输入邮箱" clearable />
+            </n-form-item>
+            <div class="profile-form-row">
+              <n-form-item label="部门">
+                <n-input v-model:value="profileForm.grade" size="large" placeholder="部门" clearable />
+              </n-form-item>
+              <n-form-item label="岗位">
+                <n-input v-model:value="profileForm.major" size="large" placeholder="岗位" clearable />
+              </n-form-item>
+            </div>
+            <n-button type="primary" block size="large" :loading="profileSaving" @click="saveProfile">
+              保存修改
+            </n-button>
+          </n-form>
+        </div>
+      </n-drawer-content>
+    </n-drawer>
   </div>
 </template>
 
@@ -248,6 +417,7 @@ import { useMessage } from 'naive-ui'
 import {
   AddOutline, ChatbubblesOutline, TrashOutline, LogOutOutline,
   FolderOpenOutline, SendOutline, CloudUploadOutline, CheckmarkCircleOutline, DownloadOutline,
+  SparklesOutline,
 } from '@vicons/ionicons5'
 import { useAuthStore } from '../stores/auth'
 import { api } from '../utils/api'
@@ -269,12 +439,40 @@ const thinkingSteps = ref([])
 const files = ref([])
 const selectedFileIds = ref([])
 const showFileDrawer = ref(false)
+const showMemoryDrawer = ref(false)
+const showProfileDrawer = ref(false)
+const memoryLoading = ref(false)
+const memorySaving = ref(false)
+const userMemory = ref(null)
+const memoryForm = ref({
+  memory_enabled: true,
+  preferred_answer_style: '结构化',
+  communication_tone: '专业清晰',
+})
+const profileSaving = ref(false)
+const profileForm = ref({ username: '', email: '', grade: '', major: '' })
 const uploading = ref(false)
 const toolLoading = ref('')
 const toolResult = ref(null)
 const messageAreaRef = ref(null)
+const hasInitializedFileSelection = ref(false)
 
 let ws = null
+
+const defaultOnboardingDocName = '欣旺达-劳动人事管理全流程手册.pdf'
+const answerStyleOptions = [
+  { label: '结构化', value: '结构化' },
+  { label: '简洁', value: '简洁' },
+  { label: '详细', value: '详细' },
+  { label: '步骤化', value: '步骤化' },
+  { label: '表格化', value: '表格化' },
+]
+const communicationToneOptions = [
+  { label: '专业清晰', value: '专业清晰' },
+  { label: '直接高效', value: '直接高效' },
+  { label: '耐心详细', value: '耐心详细' },
+  { label: '结构清晰', value: '结构清晰' },
+]
 
 // 预设问题
 const eduPresets = [
@@ -295,6 +493,18 @@ const selectedScopeLabel = computed(() => {
   if (selectedReadyFiles.value.length === 0) return '未选择培训资料'
   if (selectedReadyFiles.value.length === readyFiles.value.length) return `全部培训资料 (${readyFiles.value.length})`
   return `已选 ${selectedReadyFiles.value.length} 份`
+})
+const memoryTopics = computed(() => userMemory.value?.top_topics || [])
+const memoryDocuments = computed(() => userMemory.value?.document_preferences || [])
+const userInitials = computed(() => {
+  const name = authStore.user?.username || 'OA'
+  return name.slice(0, 2).toUpperCase()
+})
+const profileRoleLabel = computed(() => {
+  const department = authStore.user?.grade
+  const role = authStore.user?.major
+  if (department && role) return `${department} · ${role}`
+  return department || role || '未设置部门/岗位'
 })
 
 // ===== 生命周期 =====
@@ -339,6 +549,9 @@ onMounted(async () => {
     }
     isThinking.value = false
     thinkingSteps.value = []
+    if (showMemoryDrawer.value) {
+      loadMemory()
+    }
     scrollToBottom()
   })
   ws.on('error', (data) => {
@@ -429,6 +642,9 @@ async function sendMessageByHttp(payload) {
       last.evaluation = normalizeEvaluation(res.data.message.evaluation || res.data.evaluation)
     }
     await loadConversations()
+    if (showMemoryDrawer.value) {
+      await loadMemory()
+    }
   } catch (e) {
     nMessage.error(e.response?.data?.detail || '消息发送失败')
     messages.value.pop()
@@ -458,6 +674,99 @@ async function loadFiles() {
 async function openKnowledgeBase() {
   await loadFiles()
   showFileDrawer.value = true
+}
+
+async function loadMemory() {
+  memoryLoading.value = true
+  try {
+    const res = await api.get('/api/memory/me')
+    userMemory.value = res.data.memory
+    syncMemoryForm()
+  } catch (e) {
+    nMessage.error(e.response?.data?.detail || 'AI记忆加载失败')
+  } finally {
+    memoryLoading.value = false
+  }
+}
+
+async function openMemoryDrawer() {
+  showMemoryDrawer.value = true
+  await loadMemory()
+}
+
+function syncMemoryForm() {
+  const memory = userMemory.value || {}
+  memoryForm.value = {
+    memory_enabled: memory.memory_enabled !== false,
+    preferred_answer_style: memory.preferred_answer_style || '结构化',
+    communication_tone: memory.communication_tone || '专业清晰',
+  }
+}
+
+async function saveMemorySettings() {
+  memorySaving.value = true
+  try {
+    const res = await api.patch('/api/memory/me', {
+      memory_enabled: memoryForm.value.memory_enabled,
+      preferred_answer_style: memoryForm.value.preferred_answer_style,
+      communication_tone: memoryForm.value.communication_tone,
+    })
+    userMemory.value = res.data.memory
+    syncMemoryForm()
+    nMessage.success('AI记忆设置已保存')
+  } catch (e) {
+    nMessage.error(e.response?.data?.detail || 'AI记忆设置保存失败')
+  } finally {
+    memorySaving.value = false
+  }
+}
+
+function openProfileDrawer() {
+  const user = authStore.user || {}
+  profileForm.value = {
+    username: user.username || '',
+    email: user.email || '',
+    grade: user.grade || '',
+    major: user.major || '',
+  }
+  showProfileDrawer.value = true
+}
+
+async function saveProfile() {
+  const payload = {
+    username: profileForm.value.username.trim(),
+    email: profileForm.value.email.trim(),
+    grade: profileForm.value.grade.trim(),
+    major: profileForm.value.major.trim(),
+  }
+  if (!payload.username || !payload.email) {
+    nMessage.warning('请填写用户名和邮箱')
+    return
+  }
+  profileSaving.value = true
+  try {
+    await authStore.updateProfile(payload)
+    nMessage.success('个人信息已更新')
+    showProfileDrawer.value = false
+  } catch (e) {
+    nMessage.error(e.response?.data?.detail || '个人信息更新失败')
+  } finally {
+    profileSaving.value = false
+  }
+}
+
+async function clearMemory() {
+  memoryLoading.value = true
+  try {
+    const res = await api.delete('/api/memory/me')
+    userMemory.value = res.data.memory
+    syncMemoryForm()
+    nMessage.success('AI记忆已清空')
+  } catch (e) {
+    nMessage.error(e.response?.data?.detail || 'AI记忆清空失败')
+  } finally {
+    memoryLoading.value = false
+  }
 }
 
 async function handleUpload({ file, onFinish, onError }) {
@@ -491,6 +800,15 @@ async function deleteFile(fileId) {
 function syncSelectedFiles() {
   const readyIds = readyFiles.value.map((file) => file.id)
   selectedFileIds.value = selectedFileIds.value.filter((id) => readyIds.includes(id))
+  if (!hasInitializedFileSelection.value) {
+    const defaultReadyIds = readyFiles.value
+      .filter((file) => file.original_name === defaultOnboardingDocName)
+      .map((file) => file.id)
+    if (selectedFileIds.value.length === 0 && defaultReadyIds.length > 0) {
+      selectedFileIds.value = defaultReadyIds
+    }
+    hasInitializedFileSelection.value = true
+  }
 }
 
 function isFileSelected(fileId) {
@@ -805,7 +1123,9 @@ function isActiveAssistantMessage(index) {
 
 function renderMarkdown(text) {
   if (!text) return ''
-  return md.render(text)
+  return md
+    .render(String(text))
+    .replace(/&lt;br\s*\/?&gt;/gi, '<br>')
 }
 
 function isNearBottom() {
@@ -842,324 +1162,749 @@ function handleLogout() {
 <style scoped>
 .chat-layout {
   display: flex;
+  gap: 14px;
   height: 100vh;
+  padding: 14px;
+  overflow: hidden;
+  color: #111827;
+  background:
+    linear-gradient(180deg, rgba(248, 250, 252, 0.96) 0%, rgba(237, 242, 247, 0.96) 100%),
+    #f3f5f7;
 }
 
 /* ===== 左侧边栏 ===== */
 .sidebar {
-  width: 280px;
-  min-width: 280px;
-  background: #f6f8fb;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid #dfe3ea;
+  width: 252px;
+  min-width: 252px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(198, 210, 224, 0.72);
+  border-radius: 24px;
+  box-shadow: 0 28px 70px rgba(44, 55, 73, 0.12);
+  backdrop-filter: blur(28px);
 }
 
 .sidebar-header {
-  min-height: 88px;
-  padding: 20px 22px 16px;
-  font-size: 18px;
-  font-weight: bold;
-  cursor: pointer;
   display: flex;
   align-items: center;
   gap: 12px;
-  color: #1f2937;
+  min-height: 78px;
+  padding: 18px 18px 14px;
+  color: #111827;
+  cursor: pointer;
 }
 
 .sidebar-header .logo {
-  width: 36px;
-  height: 36px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  color: #fff;
+  background: #111827;
+  border-radius: 12px;
+  box-shadow: 0 16px 34px rgba(17, 24, 39, 0.18);
+  font-size: 15px;
+  font-weight: 800;
   line-height: 1;
 }
 
 .sidebar-header .brand {
-  font-size: 22px;
+  font-size: 19px;
+  font-weight: 800;
   letter-spacing: 0;
   white-space: nowrap;
 }
 
 .sidebar-actions {
-  padding: 0 18px 16px;
+  padding: 0 16px 16px;
 }
 
 .new-chat-btn {
   width: 100%;
-  height: 42px;
-  border-radius: 8px;
-  font-size: 16px;
+  height: 40px;
   justify-content: center;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 700;
+  transition: transform 0.32s ease-in-out, box-shadow 0.32s ease-in-out, background 0.32s ease-in-out;
+}
+
+.new-chat-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 36px rgba(37, 99, 235, 0.12);
 }
 
 .conv-list {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: 2px 12px 12px;
+  padding: 2px 10px 14px;
 }
 
 .conv-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   min-height: 44px;
-  padding: 9px 12px;
-  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  color: #344054;
+  border: 1px solid transparent;
+  border-radius: 14px;
   cursor: pointer;
   font-size: 15px;
-  margin-bottom: 8px;
-  color: #283142;
-  transition: background 0.15s, color 0.15s;
+  transition: transform 0.32s ease-in-out, background 0.32s ease-in-out, border-color 0.32s ease-in-out, color 0.32s ease-in-out;
 }
 
-.conv-item:hover { background: #eef2f7; }
+.conv-item:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.76);
+  border-color: rgba(198, 210, 224, 0.76);
+}
+
 .conv-item.active {
-  background: #e8f0fe;
-  color: #1557c0;
+  color: #0f4cb5;
+  background: rgba(239, 246, 255, 0.84);
+  border-color: rgba(147, 197, 253, 0.72);
 }
 
 .conv-title {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.delete-btn { opacity: 0; }
-.conv-item:hover .delete-btn { opacity: 1; }
+.delete-btn {
+  opacity: 0;
+  transition: opacity 0.32s ease-in-out;
+}
+
+.conv-item:hover .delete-btn {
+  opacity: 1;
+}
 
 .sidebar-footer {
-  padding: 14px 18px;
-  border-top: 1px solid #dfe3ea;
-  background: #f6f8fb;
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border-top: 1px solid rgba(198, 210, 224, 0.58);
+}
+
+.profile-btn {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  min-height: 58px;
+  padding: 8px 12px;
+  color: #111827;
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(198, 210, 224, 0.58);
+  border-radius: 18px;
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.32s ease-in-out, background 0.32s ease-in-out, border-color 0.32s ease-in-out, box-shadow 0.32s ease-in-out;
+}
+
+.profile-btn:hover {
+  background: rgba(255, 255, 255, 0.84);
+  border-color: rgba(152, 162, 179, 0.54);
+  box-shadow: 0 16px 34px rgba(44, 55, 73, 0.08);
+  transform: translateY(-1px);
+}
+
+.profile-avatar {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  color: #fff;
+  background: #111827;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.profile-meta {
+  min-width: 0;
+}
+
+.profile-meta strong,
+.profile-meta small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-meta strong {
+  color: #111827;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.profile-meta small {
+  margin-top: 3px;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.logout-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 42px;
+  padding: 0 14px;
+  color: #667085;
+  background: rgba(255, 255, 255, 0.42);
+  border: 1px solid rgba(198, 210, 224, 0.48);
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 700;
+  transition: transform 0.32s ease-in-out, color 0.32s ease-in-out, background 0.32s ease-in-out, border-color 0.32s ease-in-out, box-shadow 0.32s ease-in-out;
+}
+
+.logout-btn:hover {
+  color: #111827;
+  background: rgba(255, 255, 255, 0.78);
+  border-color: rgba(152, 162, 179, 0.54);
+  box-shadow: 0 16px 34px rgba(44, 55, 73, 0.08);
+  transform: translateY(-1px);
+}
+
+.logout-btn:active {
+  transform: translateY(0);
 }
 
 /* ===== 主区域 ===== */
 .main-area {
-  flex: 1;
   display: flex;
+  flex: 1;
   flex-direction: column;
-  background: #fff;
+  min-width: 0;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid rgba(198, 210, 224, 0.7);
+  border-radius: 26px;
+  box-shadow: 0 28px 70px rgba(44, 55, 73, 0.1);
+  backdrop-filter: blur(28px);
 }
 
 .chat-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 12px 20px;
-  border-bottom: 1px solid #eee;
-  background: #fafafa;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 82px;
+  padding: 18px clamp(22px, 3vw, 38px);
+  background: rgba(255, 255, 255, 0.62);
+  border-bottom: 1px solid rgba(198, 210, 224, 0.56);
+  box-shadow: 0 1px 0 rgba(37, 99, 235, 0.08);
+  backdrop-filter: blur(24px);
 }
 
 .assistant-title {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   min-width: 0;
-  color: #1f2937;
+  color: #111827;
 }
 
 .assistant-icon {
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
-  background: #e8f0fe;
-  border-radius: 8px;
-  font-size: 20px;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  color: #111827;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(198, 210, 224, 0.72);
+  border-radius: 15px;
+  font-size: 15px;
+  font-weight: 800;
 }
 
 .assistant-title strong {
   display: block;
-  font-size: 16px;
+  font-size: 18px;
+  font-weight: 800;
   line-height: 1.25;
 }
 
 .assistant-title span:last-child {
   display: block;
-  margin-top: 2px;
-  color: #6b7280;
-  font-size: 12px;
+  margin-top: 4px;
+  color: #667085;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.header-actions :deep(.n-button) {
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  transition: background 0.32s ease-in-out, transform 0.32s ease-in-out, box-shadow 0.32s ease-in-out;
+}
+
+.header-actions :deep(.n-button:hover) {
+  background: rgba(255, 255, 255, 0.76);
+  box-shadow: 0 14px 30px rgba(44, 55, 73, 0.08);
+  transform: translateY(-1px);
 }
 
 /* ===== 消息区 ===== */
 .message-area {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: 20px;
+  padding: clamp(28px, 4vw, 54px);
+  scroll-behavior: smooth;
 }
 
 .welcome {
-  text-align: center;
-  padding: 60px 20px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(280px, 0.78fr);
+  gap: clamp(32px, 5vw, 70px);
+  width: min(1080px, 100%);
+  margin: 0 auto;
+  padding-top: clamp(20px, 8vh, 86px);
+  text-align: left;
+  animation: fade-up 0.5s ease-in-out both;
 }
 
-.welcome h2 { font-size: 28px; color: #333; margin-bottom: 8px; }
-.welcome p { color: #999; margin-bottom: 24px; }
+.welcome-copy {
+  max-width: 720px;
+}
+
+.welcome-kicker {
+  display: inline-flex;
+  margin-bottom: 22px;
+  color: #667085;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.welcome h2 {
+  max-width: 720px;
+  margin: 0;
+  color: #0b1220;
+  font-size: clamp(44px, 6vw, 76px);
+  font-weight: 800;
+  line-height: 1.02;
+  letter-spacing: 0;
+}
+
+.welcome p {
+  max-width: 620px;
+  margin: 28px 0 0;
+  color: #4b5563;
+  font-size: 18px;
+  font-weight: 300;
+  line-height: 1.85;
+}
+
+.welcome-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding-top: 20px;
+}
+
+.welcome-actions :deep(.n-button) {
+  min-width: 176px;
+  height: 52px;
+  font-size: 16px;
+  font-weight: 800;
+  transition: transform 0.32s ease-in-out, box-shadow 0.32s ease-in-out;
+}
+
+.welcome-actions :deep(.n-button:hover) {
+  transform: translateY(-2px);
+  box-shadow: 0 22px 48px rgba(37, 99, 235, 0.18);
+}
 
 .preset-cards {
+  grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  max-width: 600px;
-  margin: 0 auto;
+  grid-template-columns: 1.15fr 0.85fr 1fr;
+  gap: 18px;
+  width: min(980px, 100%);
+  margin-top: 10px;
 }
 
 .preset-card {
-  padding: 12px;
-  background: #f5f7fa;
-  border-radius: 8px;
+  min-height: 118px;
+  padding: 24px;
+  color: #1f2937;
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(44, 55, 73, 0.08);
   cursor: pointer;
-  font-size: 13px;
-  color: #666;
-  transition: all 0.15s;
-  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.55;
+  transition: transform 0.36s ease-in-out, background 0.36s ease-in-out, border-color 0.36s ease-in-out, box-shadow 0.36s ease-in-out;
+  backdrop-filter: blur(22px);
+}
+
+.preset-card:nth-child(2),
+.preset-card:nth-child(5) {
+  transform: translateY(18px);
 }
 
 .preset-card:hover {
-  background: #e8f0fe;
-  color: #1a73e8;
-  transform: translateY(-1px);
+  transform: translateY(-4px);
+  background: rgba(255, 255, 255, 0.86);
+  border-color: rgba(37, 99, 235, 0.26);
+  box-shadow: 0 30px 70px rgba(44, 55, 73, 0.12);
+}
+
+.preset-card:nth-child(2):hover,
+.preset-card:nth-child(5):hover {
+  transform: translateY(10px);
 }
 
 /* 消息行 */
 .msg-row {
   display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
-  max-width: 800px;
+  gap: 14px;
+  width: min(1120px, 100%);
+  margin: 0 auto 24px;
+  animation: fade-up 0.34s ease-in-out both;
 }
 
-.msg-row.user { flex-direction: row-reverse; margin-left: auto; }
+.msg-row.user {
+  flex-direction: row-reverse;
+}
 
 .msg-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  width: 42px;
+  height: 42px;
   flex-shrink: 0;
-  background: #f0f2f5;
+  color: #475467;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(198, 210, 224, 0.68);
+  border-radius: 14px;
+  box-shadow: 0 14px 32px rgba(44, 55, 73, 0.06);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.msg-row.user .msg-avatar {
+  color: #fff;
+  background: #111827;
+  border-color: #111827;
 }
 
 .msg-bubble {
-  padding: 12px 16px;
-  border-radius: 12px;
-  line-height: 1.6;
-  max-width: 85%;
+  width: fit-content;
+  max-width: min(980px, 88%);
+  padding: 18px 20px;
+  border-radius: 20px;
+  line-height: 1.72;
+  box-shadow: 0 18px 42px rgba(44, 55, 73, 0.07);
 }
 
 .msg-row.user .msg-bubble {
-  background: #1a73e8;
   color: #fff;
+  background: #111827;
 }
 
 .msg-row.assistant .msg-bubble {
-  background: #f5f7fa;
-  color: #333;
+  position: relative;
+  overflow: hidden;
+  color: #1f2937;
+  padding: 28px 32px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(250, 252, 255, 0.78));
+  border: 1px solid rgba(208, 217, 229, 0.74);
+  border-radius: 24px;
+  box-shadow:
+    0 24px 70px rgba(44, 55, 73, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(22px);
 }
 
-.msg-content { white-space: pre-wrap; word-break: break-word; }
+.msg-row.assistant .msg-bubble::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.7), rgba(21, 153, 87, 0.32));
+}
+
+.msg-content {
+  font-size: 15px;
+  word-break: break-word;
+}
+
+.msg-row.user .msg-content {
+  white-space: pre-wrap;
+}
+
+.msg-row.assistant .msg-content {
+  color: #273449;
+  font-size: 16px;
+  line-height: 1.82;
+  white-space: normal;
+}
 
 .msg-row.assistant .msg-content :deep(h1),
 .msg-row.assistant .msg-content :deep(h2),
 .msg-row.assistant .msg-content :deep(h3) {
-  margin: 8px 0 4px;
+  margin: 26px 0 12px;
+  color: #111827;
+  font-weight: 800;
+  line-height: 1.28;
+}
+
+.msg-row.assistant .msg-content :deep(h1:first-child),
+.msg-row.assistant .msg-content :deep(h2:first-child),
+.msg-row.assistant .msg-content :deep(h3:first-child) {
+  margin-top: 0;
+}
+
+.msg-row.assistant .msg-content :deep(h1) {
+  font-size: 24px;
+}
+
+.msg-row.assistant .msg-content :deep(h2) {
+  font-size: 22px;
+}
+
+.msg-row.assistant .msg-content :deep(h3) {
+  font-size: 19px;
+}
+
+.msg-row.assistant .msg-content :deep(p),
+.msg-row.assistant .msg-content :deep(li) {
+  color: #344054;
+}
+
+.msg-row.assistant .msg-content :deep(p) {
+  margin: 0 0 14px;
+}
+
+.msg-row.assistant .msg-content :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.msg-row.assistant .msg-content :deep(ol),
+.msg-row.assistant .msg-content :deep(ul) {
+  margin: 14px 0 20px;
+  padding-left: 1.35em;
+}
+
+.msg-row.assistant .msg-content :deep(li) {
+  margin: 8px 0;
+  padding-left: 6px;
+  line-height: 1.78;
+}
+
+.msg-row.assistant .msg-content :deep(li::marker) {
+  color: #667085;
+  font-weight: 700;
+}
+
+.msg-row.assistant .msg-content :deep(li > p) {
+  margin: 0 0 6px;
+}
+
+.msg-row.assistant .msg-content :deep(strong) {
+  color: #1d2939;
+  font-weight: 800;
+}
+
+.msg-row.assistant .msg-content :deep(blockquote) {
+  margin: 16px 0;
+  padding: 12px 16px;
+  color: #475467;
+  background: rgba(248, 250, 252, 0.82);
+  border-left: 3px solid rgba(37, 99, 235, 0.32);
+  border-radius: 12px;
+}
+
+.msg-row.assistant .msg-content :deep(table) {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin: 20px 0 24px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  color: #273449;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(198, 210, 224, 0.74);
+  border-radius: 16px;
+  border-spacing: 0;
+  border-collapse: separate;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+}
+
+.msg-row.assistant .msg-content :deep(thead) {
+  background: rgba(248, 250, 252, 0.96);
+}
+
+.msg-row.assistant .msg-content :deep(th),
+.msg-row.assistant .msg-content :deep(td) {
+  min-width: 148px;
+  padding: 14px 16px;
+  vertical-align: top;
+  border-right: 1px solid rgba(198, 210, 224, 0.66);
+  border-bottom: 1px solid rgba(198, 210, 224, 0.66);
+  font-size: 15px;
+  line-height: 1.72;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.msg-row.assistant .msg-content :deep(th:first-child),
+.msg-row.assistant .msg-content :deep(td:first-child) {
+  min-width: 96px;
+}
+
+.msg-row.assistant .msg-content :deep(th:last-child),
+.msg-row.assistant .msg-content :deep(td:last-child) {
+  border-right: 0;
+}
+
+.msg-row.assistant .msg-content :deep(tr:last-child td) {
+  border-bottom: 0;
+}
+
+.msg-row.assistant .msg-content :deep(th) {
+  color: #111827;
+  font-weight: 800;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.msg-row.assistant .msg-content :deep(td strong) {
+  display: inline;
 }
 
 .msg-row.assistant .msg-content :deep(code) {
-  background: #e8e8e8;
-  padding: 1px 5px;
-  border-radius: 3px;
-  font-size: 13px;
+  padding: 2px 6px;
+  background: rgba(17, 24, 39, 0.07);
+  border-radius: 6px;
+  font-size: 14px;
 }
 
 .msg-row.assistant .msg-content :deep(pre) {
-  background: #282c34;
-  color: #abb2bf;
-  padding: 12px;
-  border-radius: 6px;
+  padding: 16px;
   overflow-x: auto;
+  color: #d1d5db;
+  background: #111827;
+  border-radius: 14px;
 }
 
 .msg-row.assistant .msg-content :deep(pre code) {
-  background: transparent;
   color: inherit;
+  background: transparent;
 }
 
-.msg-sources {
-  margin-top: 8px;
-  font-size: 12px;
-}
-
+.msg-sources,
 .msg-evaluation {
-  margin-top: 8px;
-  font-size: 12px;
+  margin-top: 14px;
+  font-size: 14px;
+}
+
+.msg-sources :deep(.n-collapse),
+.msg-evaluation :deep(.n-collapse),
+.msg-thinking :deep(.n-collapse) {
+  --n-title-font-size: 14px;
 }
 
 .metric-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 10px;
 }
 
 .metric-item {
-  padding: 8px;
-  border: 1px solid #e4e7ed;
-  border-radius: 6px;
-  background: #fafafa;
+  padding: 12px;
+  background: rgba(248, 250, 252, 0.82);
+  border: 1px solid rgba(198, 210, 224, 0.68);
+  border-radius: 14px;
 }
 
 .metric-label {
   display: block;
-  margin-bottom: 4px;
-  color: #777;
+  margin-bottom: 8px;
+  color: #667085;
+  font-size: 14px;
 }
 
-.metric-good { color: #18a058; }
-.metric-warn { color: #f0a020; }
-.metric-bad { color: #d03050; }
+.metric-item strong {
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.metric-good { color: #159957; }
+.metric-warn { color: #d97706; }
+.metric-bad { color: #d92d20; }
 
 .metric-detail {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 14px;
-  margin-top: 10px;
-  color: #666;
+  gap: 10px 16px;
+  margin-top: 14px;
+  color: #667085;
+  font-size: 14px;
 }
 
 .metric-notes {
-  margin-top: 8px;
-  color: #888;
-  line-height: 1.5;
+  margin-top: 12px;
+  color: #667085;
+  line-height: 1.65;
 }
 
 .source-item {
-  padding: 4px 0;
-  color: #888;
-  font-size: 12px;
+  padding: 8px 0;
+  color: #667085;
+  font-size: 14px;
+  line-height: 1.65;
 }
 
 .msg-thinking {
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px solid #e4e7ed;
-  font-size: 12px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(198, 210, 224, 0.58);
+  font-size: 14px;
 }
 
 .thinking-step {
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-height: 24px;
-  font-size: 12px;
-  color: #666;
-  padding: 3px 0;
+  gap: 8px;
+  min-height: 28px;
+  padding: 4px 0;
+  color: #4b5563;
+  font-size: 14px;
 }
 
 .thinking-text {
@@ -1169,7 +1914,7 @@ function handleLogout() {
 }
 
 .thinking-duration {
-  color: #909399;
+  color: #98a2b3;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -1177,40 +1922,68 @@ function handleLogout() {
 .thinking-running {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  color: #18a058;
-  font-size: 12px;
+  gap: 10px;
+  margin-top: 12px;
+  color: #159957;
+  font-size: 14px;
 }
 
 /* ===== 输入区 ===== */
 .input-area {
-  padding: 12px 20px 20px;
-  border-top: 1px solid #eee;
-  background: #fafafa;
+  padding: 18px clamp(22px, 3vw, 38px) 26px;
+  background: rgba(255, 255, 255, 0.68);
+  border-top: 1px solid rgba(198, 210, 224, 0.56);
+  backdrop-filter: blur(24px);
 }
 
 .scope-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-height: 28px;
-  margin-bottom: 8px;
-  color: #606266;
-  font-size: 12px;
+  gap: 10px;
+  min-height: 32px;
+  margin-bottom: 12px;
   overflow: hidden;
+  color: #667085;
+  font-size: 14px;
 }
 
 .scope-file {
-  max-width: 180px;
+  max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .scope-extra {
-  color: #909399;
+  color: #98a2b3;
   white-space: nowrap;
+}
+
+.input-area :deep(.n-input-group) {
+  display: flex;
+  gap: 12px;
+}
+
+.input-area :deep(.n-input) {
+  border-radius: 20px;
+  transition: box-shadow 0.32s ease-in-out, transform 0.32s ease-in-out;
+}
+
+.input-area :deep(.n-input:hover),
+.input-area :deep(.n-input.n-input--focus) {
+  box-shadow: 0 18px 44px rgba(44, 55, 73, 0.08);
+}
+
+.input-area :deep(.n-button) {
+  min-width: 54px;
+  height: auto;
+  border-radius: 18px;
+  transition: transform 0.32s ease-in-out, box-shadow 0.32s ease-in-out;
+}
+
+.input-area :deep(.n-button:hover) {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 36px rgba(37, 99, 235, 0.14);
 }
 
 .file-select-toolbar {
@@ -1218,30 +1991,460 @@ function handleLogout() {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 
 .file-prefix {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .tool-markdown {
-  max-height: 320px;
+  max-height: 360px;
   overflow-y: auto;
-  line-height: 1.7;
+  line-height: 1.8;
 }
 
 .knowledge-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  max-height: 360px;
+  gap: 12px;
+  max-height: 420px;
   overflow-y: auto;
 }
 
 .knowledge-card {
   cursor: pointer;
+  transition: transform 0.32s ease-in-out, box-shadow 0.32s ease-in-out;
+}
+
+.knowledge-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 44px rgba(44, 55, 73, 0.1);
+}
+
+/* ===== AI 记忆 ===== */
+.memory-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  color: #111827;
+}
+
+.memory-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 252, 0.86));
+  border: 1px solid rgba(198, 210, 224, 0.62);
+  border-radius: 22px;
+  box-shadow: 0 22px 52px rgba(44, 55, 73, 0.08);
+}
+
+.memory-symbol {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  color: #fff;
+  background: #111827;
+  border-radius: 16px;
+  box-shadow: 0 16px 34px rgba(17, 24, 39, 0.16);
+}
+
+.memory-hero p {
+  margin: 0 0 4px;
+  color: #667085;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.memory-hero h3 {
+  margin: 0;
+  color: #111827;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.memory-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.memory-stat,
+.memory-section {
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(198, 210, 224, 0.58);
+  border-radius: 18px;
+}
+
+.memory-stat span,
+.memory-label {
+  display: block;
+  margin-bottom: 8px;
+  color: #667085;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.memory-stat strong {
+  color: #111827;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.memory-settings {
+  display: grid;
+  gap: 16px;
+}
+
+.memory-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(198, 210, 224, 0.52);
+}
+
+.memory-setting-row strong,
+.memory-setting-row small {
+  display: block;
+}
+
+.memory-setting-row strong {
+  color: #111827;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.memory-setting-row small {
+  margin-top: 4px;
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.memory-form {
+  display: grid;
+  gap: 2px;
+}
+
+.memory-form :deep(.n-select) {
+  border-radius: 14px;
+}
+
+.memory-form :deep(.n-button) {
+  min-height: 44px;
+  margin-top: 4px;
+  border-radius: 999px;
+  font-weight: 800;
+}
+
+.memory-profile {
+  display: grid;
+  gap: 12px;
+}
+
+.memory-profile div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(198, 210, 224, 0.52);
+}
+
+.memory-profile div:last-child {
+  border-bottom: 0;
+}
+
+.memory-profile small {
+  color: #667085;
+  font-size: 14px;
+}
+
+.memory-profile strong {
+  color: #1d2939;
+  font-size: 15px;
+  font-weight: 800;
+  text-align: right;
+}
+
+.memory-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.memory-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  color: #1d2939;
+  background: rgba(248, 250, 252, 0.9);
+  border: 1px solid rgba(198, 210, 224, 0.58);
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.memory-docs {
+  display: grid;
+  gap: 10px;
+}
+
+.memory-doc {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(198, 210, 224, 0.52);
+}
+
+.memory-doc:last-child {
+  border-bottom: 0;
+}
+
+.memory-doc span {
+  min-width: 0;
+  overflow: hidden;
+  color: #1d2939;
+  font-size: 14px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memory-doc small {
+  flex-shrink: 0;
+  color: #667085;
+  font-size: 13px;
+}
+
+.memory-last-question {
+  margin: 0;
+  color: #344054;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.memory-actions {
+  padding-top: 4px;
+}
+
+.memory-actions :deep(.n-button) {
+  min-height: 44px;
+  border-radius: 999px;
+  font-weight: 800;
+}
+
+/* ===== 个人信息 ===== */
+.profile-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.profile-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 252, 0.86));
+  border: 1px solid rgba(198, 210, 224, 0.62);
+  border-radius: 22px;
+  box-shadow: 0 22px 52px rgba(44, 55, 73, 0.08);
+}
+
+.profile-hero-avatar {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  flex-shrink: 0;
+  color: #fff;
+  background: #111827;
+  border-radius: 18px;
+  box-shadow: 0 18px 36px rgba(17, 24, 39, 0.16);
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.profile-hero p {
+  margin: 0 0 4px;
+  color: #667085;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.profile-hero h3 {
+  margin: 0;
+  color: #111827;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.18;
+}
+
+.profile-hero span {
+  display: block;
+  margin-top: 6px;
+  color: #667085;
+  font-size: 14px;
+}
+
+.profile-form {
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(198, 210, 224, 0.58);
+  border-radius: 20px;
+}
+
+.profile-form-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.profile-form :deep(.n-input) {
+  border-radius: 14px;
+}
+
+.profile-form :deep(.n-button) {
+  min-height: 46px;
+  border-radius: 999px;
+  font-weight: 800;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 1020px) {
+  .chat-layout {
+    flex-direction: column;
+    gap: 12px;
+    height: 100dvh;
+    padding: 10px;
+  }
+
+  .sidebar {
+    width: 100%;
+    min-width: 0;
+    max-height: 238px;
+    border-radius: 24px;
+  }
+
+  .sidebar-header {
+    min-height: 72px;
+    padding: 16px 18px 12px;
+  }
+
+  .sidebar-actions {
+    padding: 0 18px 14px;
+  }
+
+  .conv-list {
+    display: flex;
+    flex: none;
+    gap: 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0 18px 16px;
+  }
+
+  .conv-item {
+    min-width: 210px;
+    margin-bottom: 0;
+  }
+
+  .sidebar-footer {
+    display: none;
+  }
+
+  .main-area {
+    min-height: 0;
+    border-radius: 24px;
+  }
+
+  .chat-header {
+    min-height: 72px;
+    padding: 14px 18px;
+  }
+
+  .header-actions {
+    gap: 6px;
+  }
+
+  .header-actions :deep(.n-button) {
+    padding: 0 8px;
+  }
+
+  .message-area {
+    padding: 26px 18px;
+  }
+
+  .welcome {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    padding-top: 8px;
+  }
+
+  .welcome-actions {
+    justify-content: flex-start;
+    padding-top: 0;
+  }
+
+  .preset-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .preset-card,
+  .preset-card:nth-child(2),
+  .preset-card:nth-child(5),
+  .preset-card:hover,
+  .preset-card:nth-child(2):hover,
+  .preset-card:nth-child(5):hover {
+    min-height: auto;
+    transform: none;
+  }
+
+  .msg-bubble {
+    max-width: calc(100vw - 92px);
+  }
+
+  .scope-bar {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+
+  .input-area {
+    padding: 14px 16px 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 </style>

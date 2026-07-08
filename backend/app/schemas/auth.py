@@ -19,6 +19,14 @@ class LoginRequest(BaseModel):
     password: str = Field(..., description="密码")
 
 
+class UserUpdateRequest(BaseModel):
+    """更新个人资料请求"""
+    username: str = Field(..., min_length=3, max_length=50, description="用户名")
+    email: str = Field(..., max_length=100, description="邮箱")
+    grade: str | None = Field(None, max_length=20, description="部门（兼容旧字段 grade）")
+    major: str | None = Field(None, max_length=100, description="岗位（兼容旧字段 major）")
+
+
 class TokenResponse(BaseModel):
     """令牌响应"""
     access_token: str

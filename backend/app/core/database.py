@@ -51,3 +51,4 @@ def init_db():
     Base.metadata.create_all(bind=engine)
     _ensure_sqlite_column("messages", "agent_steps", "TEXT")
     _ensure_sqlite_column("messages", "evaluation", "TEXT")
+    _ensure_sqlite_column("user_memories", "memory_enabled", "BOOLEAN DEFAULT 1")
