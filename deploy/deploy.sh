@@ -142,12 +142,13 @@ except Exception:
 if [[ "$MODEL_CACHED" == "yes" ]]; then
     ok "向量模型已缓存，跳过下载"
 else
-    echo "  正在下载 $MODEL_NAME（需要网络）..."
+    echo "  正在下载 $MODEL_NAME（使用 hf-mirror.com 镜像）..."
     # 临时允许联网下载
     sudo -u "$SUDO_USER" "$VENV_DIR/bin/python" -c "
 import os
 # 允许联网下载
 os.environ.pop('HF_HUB_OFFLINE', None)
+os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
 os.environ.pop('TRANSFORMERS_OFFLINE', None)
 from sentence_transformers import SentenceTransformer
 print('正在下载模型...')
