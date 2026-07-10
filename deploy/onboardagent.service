@@ -10,8 +10,8 @@ After=network.target
 
 [Service]
 Type=simple
-User=www-data
-Group=www-data
+User=root
+Group=root
 WorkingDirectory=/opt/onboardagent/backend
 EnvironmentFile=/opt/onboardagent/backend/.env
 Environment=PATH=/opt/onboardagent/backend/venv/bin:/usr/local/bin:/usr/bin:/bin
