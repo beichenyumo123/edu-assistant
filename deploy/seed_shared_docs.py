@@ -14,8 +14,11 @@ import sys
 from pathlib import Path
 
 # 确保 backend 目录在 sys.path 中，以支持 from app.xxx import xxx
-BACKEND_DIR = Path(__file__).resolve().parents[1] / "backend"
+BACKEND_DIR = (Path(__file__).resolve().parents[1] / "backend").resolve()
 sys.path.insert(0, str(BACKEND_DIR))
+
+# 切换到 backend 目录（SQLite 数据库路径 sqlite:///./edu_assistant.db 相对于 CWD）
+os.chdir(str(BACKEND_DIR))
 
 # 从 .env 加载配置
 from app.core.config import settings  # noqa: E402
