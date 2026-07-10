@@ -1,12 +1,17 @@
 """
 检索器 - 封装 ChromaDB 查询逻辑
+
+同时查询用户个人集合 (user_{id}) 和共享集合 (shared)，
+合并结果按相似度排序。
 """
 import os
 from typing import List
 
+from sqlalchemy import or_
+
 from ..core.database import SessionLocal
 from ..models.document import Document
-from .vectorstore import RetrievedDocument, get_vectorstore
+from .vectorstore import RetrievedDocument, get_vectorstore, get_shared_vectorstore
 from ..core.config import settings
 
 
@@ -43,18 +48,26 @@ def _document_file_exists(doc: Document) -> bool:
 
 
 def _active_document_ids(user_id: int, requested_ids: list[int] | None) -> list[int]:
-    """返回当前用户可参与检索的 ready 资料 ID。"""
+    """返回当前用户可参与检索的 ready 资料 ID（含共享文档）。"""
     db = SessionLocal()
     try:
         query = db.query(Document).filter(
-            Document.user_id == user_id,
+            or_(
+                Document.user_id == user_id,
+                Document.is_shared == True,  # noqa: E712
+            ),
             Document.status == "ready",
         )
         if requested_ids is not None:
             query = query.filter(Document.id.in_(requested_ids))
 
         docs = query.all()
-        return [int(doc.id) for doc in docs if _document_file_exists(doc)]
+        # 共享文档无物理文件，跳过文件存在性检查
+        return [
+            int(doc.id)
+            for doc in docs
+            if doc.is_shared or _document_file_exists(doc)
+        ]
     finally:
         db.close()
 
@@ -84,7 +97,7 @@ def retrieve_relevant_chunks(
     top_k: int = None,
     document_ids: list[int] | None = None,
 ) -> List[RetrievedDocument]:
-    """从企业知识库检索相关文档块，并补充证据元数据。"""
+    """从企业知识库检索相关文档块（个人集合 + 共享集合），并补充证据元数据。"""
     k = top_k or settings.RETRIEVAL_TOP_K
     if document_ids is not None and not document_ids:
         return []
@@ -100,21 +113,45 @@ def retrieve_relevant_chunks(
         else {"document_id": {"$in": normalized_ids}}
     )
 
-    vectorstore = get_vectorstore(user_id=user_id)
+    personal_store = get_vectorstore(user_id=user_id)
+    shared_store = get_shared_vectorstore()
 
-    try:
-        scored_docs = vectorstore.similarity_search_with_score(query, k=k, where=where)
-        return [
-            _enrich_doc(doc, score, rank)
-            for rank, (doc, score) in enumerate(scored_docs, 1)
-        ]
-    except Exception as exc:
+    def _query_store(store, k_override=None):
+        """查询单个向量存储，失败时降级为无分数检索。"""
+        kk = k_override or k
         try:
-            docs = vectorstore.similarity_search(query, k=k, where=where)
-            return [_enrich_doc(doc, None, rank) for rank, doc in enumerate(docs, 1)]
-        except Exception as fallback_exc:
-            print(f"⚠️ 企业知识库检索失败，已跳过本次 RAG 检索: {fallback_exc or exc}")
-            return []
+            return store.similarity_search_with_score(query, k=kk, where=where)
+        except Exception:
+            try:
+                docs = store.similarity_search(query, k=kk, where=where)
+                return [(doc, None) for doc in docs]
+            except Exception:
+                return []
+
+    # 分别查询两个集合
+    personal_results = _query_store(personal_store)
+    shared_results = _query_store(shared_store)
+
+    # 合并、按分数排序（chroma 距离越小越相关，None 排最后）
+    all_results = personal_results + shared_results
+    all_results.sort(key=lambda x: x[1] if x[1] is not None else float("inf"))
+    all_results = all_results[:k]
+
+    # 去重：同名文档保留分数更优的
+    seen_doc_names = set()
+    deduped = []
+    for doc, score in all_results:
+        doc_name = (doc.metadata or {}).get("document_name", "")
+        if doc_name and doc_name in seen_doc_names:
+            continue
+        if doc_name:
+            seen_doc_names.add(doc_name)
+        deduped.append((doc, score))
+
+    return [
+        _enrich_doc(doc, score, rank)
+        for rank, (doc, score) in enumerate(deduped, 1)
+    ]
 
 
 def format_retrieved_context(docs: List[RetrievedDocument]) -> str:

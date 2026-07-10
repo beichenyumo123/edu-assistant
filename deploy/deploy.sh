@@ -43,7 +43,7 @@ echo "  ╚═══════════════════════
 echo -e "${NC}"
 
 # ── 1. 系统依赖 ──────────────────────────────────────────────
-step "1/8 安装系统依赖..."
+step "1/9 安装系统依赖..."
 
 # 检测包管理器
 if command -v apt &>/dev/null; then
@@ -89,14 +89,14 @@ fi
 ok "Git $(git --version | awk '{print $3}')"
 
 # ── 2. 创建目录结构 ──────────────────────────────────────────
-step "2/8 创建目录结构..."
+step "2/9 创建目录结构..."
 mkdir -p "$APP_DIR" "$LOG_DIR"
 chown -R "$SUDO_USER:$SUDO_USER" "$APP_DIR"
 ok "应用目录: $APP_DIR"
 ok "日志目录: $LOG_DIR"
 
 # ── 3. Python 虚拟环境 ──────────────────────────────────────
-step "3/8 创建 Python 虚拟环境..."
+step "3/9 创建 Python 虚拟环境..."
 if [[ ! -d "$VENV_DIR" ]]; then
     sudo -u "$SUDO_USER" python3.11 -m venv "$VENV_DIR"
 fi
@@ -109,7 +109,7 @@ sudo -u "$SUDO_USER" "$VENV_DIR/bin/pip" install -q gunicorn
 ok "Python 依赖安装完成"
 
 # ── 4. 环境配置 ──────────────────────────────────────────────
-step "4/8 配置环境变量..."
+step "4/9 配置环境变量..."
 if [[ ! -f "$BACKEND_DIR/.env" ]]; then
     if [[ -f "$APP_DIR/deploy/.env.production" ]]; then
         cp "$APP_DIR/deploy/.env.production" "$BACKEND_DIR/.env"
@@ -123,7 +123,7 @@ else
 fi
 
 # ── 5. 下载向量模型 ──────────────────────────────────────────
-step "5/8 下载向量模型（首次较慢，约 400MB）..."
+step "5/9 下载向量模型（首次较慢，约 400MB）..."
 MODEL_NAME="BAAI/bge-small-zh-v1.5"
 
 # 检查模型是否已在缓存中
@@ -159,7 +159,13 @@ print('下载完成')
 fi
 
 # ── 6. 构建前端 ──────────────────────────────────────────────
-step "6/8 构建前端..."
+
+# ── 5.5. 预向量化默认培训资料 ──────────────────────────────────
+step "5.5/9 预向量化默认企业培训资料到共享知识库..."
+sudo -u "$SUDO_USER" "$VENV_DIR/bin/python" "$APP_DIR/deploy/seed_shared_docs.py"
+ok "默认培训资料已向量化"
+
+step "6/9 构建前端..."
 
 # 检查 Node.js
 if ! command -v node &>/dev/null && ! command -v nodejs &>/dev/null; then
@@ -184,7 +190,7 @@ sudo -u "$SUDO_USER" npm run build
 ok "前端构建完成 → $FRONTEND_DIR/dist/"
 
 # ── 7. 配置 Nginx ────────────────────────────────────────────
-step "7/8 配置 Nginx..."
+step "7/9 配置 Nginx..."
 
 # 对于 Ubuntu/Debian，使用 sites-available；对于 CentOS/RHEL，直接用 conf.d
 if [[ -d "/etc/nginx/sites-available" ]]; then
@@ -207,7 +213,7 @@ else
 fi
 
 # ── 8. 配置 systemd 服务 ─────────────────────────────────────
-step "8/8 配置 systemd 服务..."
+step "8/9 配置 systemd 服务..."
 cp "$APP_DIR/deploy/onboardagent.service" /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable onboardagent

@@ -12,6 +12,8 @@ class FileInfo(BaseModel):
     file_size: int
     chunk_count: int
     status: str
+    is_shared: bool = False
+    is_default: bool = False
     created_at: str
 
 

@@ -9,7 +9,6 @@ from ..core.database import get_db
 from ..core.security import hash_password, verify_password, create_access_token, decode_access_token
 from ..models.user import User
 from ..schemas.auth import RegisterRequest, LoginRequest, TokenResponse, UserUpdateRequest
-from ..services.default_documents import ensure_default_onboarding_document
 
 router = APIRouter(prefix="/api/auth", tags=["认证"])
 security = HTTPBearer()
@@ -56,12 +55,8 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
-    # 新用户默认带入企业入职培训手册，方便开箱即用。
-    # 初始化失败不阻断注册，避免默认资料缺失影响账号创建。
-    try:
-        ensure_default_onboarding_document(db, user)
-    except Exception as exc:
-        print(f"默认入职培训资料初始化失败: {exc}")
+    # 共享知识库已在部署时预向量化（deploy/seed_shared_docs.py），
+    # 新用户注册后自动可见共享文档，无需 per-user 初始化。
 
     # 生成Token
     token = create_access_token(data={"sub": str(user.id), "username": user.username})

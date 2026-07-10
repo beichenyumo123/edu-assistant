@@ -1,5 +1,9 @@
 """
 默认企业培训资料初始化服务
+
+已废弃（2026-07）：默认文档不再在注册时 per-user 初始化，改为
+部署时通过 deploy/seed_shared_docs.py 预向量化到共享 ChromaDB 集合。
+此模块保留供参考，auth.py 中已移除对其的调用。
 """
 from __future__ import annotations
 

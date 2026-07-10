@@ -52,3 +52,5 @@ def init_db():
     _ensure_sqlite_column("messages", "agent_steps", "TEXT")
     _ensure_sqlite_column("messages", "evaluation", "TEXT")
     _ensure_sqlite_column("user_memories", "memory_enabled", "BOOLEAN DEFAULT 1")
+    _ensure_sqlite_column("documents", "is_shared", "BOOLEAN DEFAULT 0")
+    _ensure_sqlite_column("documents", "is_default", "BOOLEAN DEFAULT 0")

@@ -220,6 +220,7 @@
                 <n-tag :type="f.status === 'ready' ? 'success' : f.status === 'error' ? 'error' : 'warning'" size="small">
                   {{ f.status === 'ready' ? '已就绪' : f.status === 'error' ? '失败' : '处理中' }}
                 </n-tag>
+                <n-tag v-if="f.is_default" type="info" size="small">系统默认</n-tag>
               </div>
             </template>
             <n-thing :title="f.original_name" :description="`${formatSize(f.file_size)} · ${f.chunk_count}块 · ${f.created_at?.substring(0, 10)}`" />
@@ -231,7 +232,7 @@
                 <n-button size="tiny" ghost type="info" :disabled="f.status !== 'ready'" :loading="toolLoading === `knowledge-${f.id}`" @click="extractKnowledge(f)">
                   知识卡片
                 </n-button>
-                <n-button text type="error" @click="deleteFile(f.id)"><n-icon><trash-outline /></n-icon></n-button>
+                <n-button text type="error" :disabled="f.is_default" @click="deleteFile(f.id)"><n-icon><trash-outline /></n-icon></n-button>
               </n-space>
             </template>
           </n-list-item>
@@ -802,7 +803,7 @@ function syncSelectedFiles() {
   selectedFileIds.value = selectedFileIds.value.filter((id) => readyIds.includes(id))
   if (!hasInitializedFileSelection.value) {
     const defaultReadyIds = readyFiles.value
-      .filter((file) => file.original_name === defaultOnboardingDocName)
+      .filter((file) => file.is_default || file.is_shared)
       .map((file) => file.id)
     if (selectedFileIds.value.length === 0 && defaultReadyIds.length > 0) {
       selectedFileIds.value = defaultReadyIds

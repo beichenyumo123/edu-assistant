@@ -6,6 +6,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from ..core.database import get_db
@@ -143,10 +144,15 @@ def list_files(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """获取当前用户的文件列表"""
+    """获取当前用户的文件列表（含共享文档）"""
     docs = (
         db.query(Document)
-        .filter(Document.user_id == current_user.id)
+        .filter(
+            or_(
+                Document.user_id == current_user.id,
+                Document.is_shared == True,  # noqa: E712
+            )
+        )
         .order_by(Document.created_at.desc())
         .all()
     )
@@ -166,12 +172,14 @@ def delete_file(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """删除文件及对应的向量数据"""
-    doc = db.query(Document).filter(
-        Document.id == file_id, Document.user_id == current_user.id
-    ).first()
+    """删除文件及对应的向量数据（系统默认文档不可删除）"""
+    doc = db.query(Document).filter(Document.id == file_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="文件不存在")
+    if doc.is_default:
+        raise HTTPException(status_code=403, detail="系统默认文档不可删除")
+    if doc.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="无权删除此文件")
 
     # 删除ChromaDB中的向量数据
     try:

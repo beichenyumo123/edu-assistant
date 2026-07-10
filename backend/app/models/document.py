@@ -1,7 +1,7 @@
 """
 文档模型 - 记录用户上传的企业培训资料
 """
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean
 from sqlalchemy.sql import func
 
 from ..core.database import Base
@@ -19,6 +19,8 @@ class Document(Base):
     chunk_count = Column(Integer, default=0)         # 向量化后的分块数
     status = Column(String(20), default="processing")  # 'processing'|'ready'|'error'
     error_message = Column(String(500), default=None)
+    is_shared = Column(Boolean, default=False)       # 是否在共享知识库中
+    is_default = Column(Boolean, default=False)      # 是否为系统默认文档（不可删除）
     created_at = Column(DateTime, server_default=func.now())
 
     def to_dict(self):
@@ -32,5 +34,7 @@ class Document(Base):
             "chunk_count": self.chunk_count,
             "status": self.status,
             "error_message": self.error_message,
+            "is_shared": self.is_shared,
+            "is_default": self.is_default,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

@@ -20,6 +20,19 @@ async def lifespan(app: FastAPI):
     preload_embeddings()
     print(f"✅ 本地向量模型加载完成: {settings.LOCAL_EMBEDDING_MODEL}")
     print(f"✅ 数据库初始化完成")
+
+    # 检查共享知识库
+    try:
+        from .rag.vectorstore import get_shared_vectorstore
+        shared_store = get_shared_vectorstore()
+        shared_count = shared_store.count()
+        if shared_count == 0:
+            print("⚠️  共享知识库为空 — 请运行 deploy/seed_shared_docs.py 预向量化默认文档")
+        else:
+            print(f"✅ 共享知识库已就绪 ({shared_count} 个向量块)")
+    except Exception as exc:
+        print(f"⚠️  共享知识库检查失败: {exc}")
+
     print(f"✅ {settings.APP_NAME} v{settings.APP_VERSION} 启动成功")
     print(f"📡 API文档: http://{settings.HOST}:{settings.PORT}/docs")
     yield

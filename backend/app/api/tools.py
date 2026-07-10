@@ -4,8 +4,10 @@
 import json
 import os
 import re
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from ..core.database import get_db
@@ -242,13 +244,21 @@ def summarize_document(
     length = body.get("length", "medium")
 
     doc = db.query(Document).filter(
-        Document.id == doc_id, Document.user_id == current_user.id
+        Document.id == doc_id,
+        or_(Document.user_id == current_user.id, Document.is_shared == True),  # noqa: E712
     ).first()
     if not doc:
         raise HTTPException(status_code=404, detail="文档不存在")
 
-    # 读取文件文本
-    file_path = _resolve_document_path(doc)
+    # 共享文档从 seeds 目录读取，用户文档从 uploads 读取
+    if doc.is_shared:
+        file_path = str(
+            Path(__file__).resolve().parents[3] / "deploy" / "seeds" / doc.original_name
+        )
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="共享文档种子文件缺失")
+    else:
+        file_path = _resolve_document_path(doc)
     text = parse_file(file_path, f".{doc.file_type}")
 
     # 截取前4000字做摘要
@@ -284,12 +294,20 @@ def extract_knowledge(
     doc_id = body.get("document_id")
 
     doc = db.query(Document).filter(
-        Document.id == doc_id, Document.user_id == current_user.id
+        Document.id == doc_id,
+        or_(Document.user_id == current_user.id, Document.is_shared == True),  # noqa: E712
     ).first()
     if not doc:
         raise HTTPException(status_code=404, detail="文档不存在")
 
-    file_path = _resolve_document_path(doc)
+    if doc.is_shared:
+        file_path = str(
+            Path(__file__).resolve().parents[3] / "deploy" / "seeds" / doc.original_name
+        )
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="共享文档种子文件缺失")
+    else:
+        file_path = _resolve_document_path(doc)
     text = parse_file(file_path, f".{doc.file_type}")
     text_preview = text[:12000]
 
@@ -338,10 +356,14 @@ def extract_knowledge(
         knowledge_points = _fallback_knowledge_points(text_preview)
 
     # 为每张知识卡片检索相关原文片段
-    from ..rag.vectorstore import get_vectorstore
+    from ..rag.vectorstore import get_vectorstore, get_shared_vectorstore
 
     try:
-        vectorstore = get_vectorstore(user_id=current_user.id)
+        vectorstore = (
+            get_shared_vectorstore()
+            if doc.is_shared
+            else get_vectorstore(user_id=current_user.id)
+        )
     except Exception as exc:
         print(f"⚠️ 培训知识卡片向量库加载失败，已退回原文片段兜底: {exc}")
         vectorstore = None
