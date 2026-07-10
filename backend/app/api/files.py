@@ -159,7 +159,8 @@ def list_files(
     files = []
     for doc in docs:
         item = doc.to_dict()
-        if doc.status == "ready" and not _document_file_exists(doc):
+        # 共享文档的种子文件在 deploy/seeds/，不检查 uploads 目录
+        if doc.status == "ready" and not doc.is_shared and not _document_file_exists(doc):
             item["status"] = "error"
             item["error_message"] = "资料文件缺失，请重新上传"
         files.append(item)
