@@ -48,10 +48,14 @@ def _existing_upload_path(doc: Document) -> Path | None:
 def _find_default_source_path(db: Session) -> Path | None:
     """查找默认手册源文件。
 
-    优先使用上传目录中已有的同名资料；本地开发时，如果用户刚从桌面提供了
-    这份 PDF，也允许从桌面兜底复制一次。
+    查找顺序：
+    1. 已上传的同名资料
+    2. uploads 目录中的关键词匹配 PDF
+    3. 项目 deploy/seeds/ 目录（部署时固化）
+    4. 桌面兜底（本地开发）
     """
     upload_dir = Path(settings.UPLOAD_DIR)
+    backend_dir = Path(__file__).resolve().parents[2]
 
     docs = (
         db.query(Document)
@@ -67,6 +71,11 @@ def _find_default_source_path(db: Session) -> Path | None:
     for path in upload_dir.glob("*.pdf"):
         if any(keyword in path.name for keyword in DEFAULT_ONBOARDING_KEYWORDS):
             return path
+
+    # 部署种子文件（deploy/seeds/）
+    seed_path = backend_dir.parent / "deploy" / "seeds" / DEFAULT_ONBOARDING_ORIGINAL_NAME
+    if seed_path.exists() and seed_path.is_file():
+        return seed_path
 
     desktop_copy = Path.home() / "Desktop" / DEFAULT_ONBOARDING_ORIGINAL_NAME
     if desktop_copy.exists() and desktop_copy.is_file():
