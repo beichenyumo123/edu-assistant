@@ -5,7 +5,7 @@
       <!-- Logo -->
       <div class="sidebar-header" @click="handleNewChat">
         <span class="logo">CC</span>
-        <span class="brand">CorpKnow Compass</span>
+        <span class="brand">CorpKnow</span>
       </div>
 
       <!-- 新建对话 -->
@@ -498,7 +498,7 @@ const selectedScopeLabel = computed(() => {
 const memoryTopics = computed(() => userMemory.value?.top_topics || [])
 const memoryDocuments = computed(() => userMemory.value?.document_preferences || [])
 const userInitials = computed(() => {
-  const name = authStore.user?.username || 'OA'
+  const name = authStore.user?.username || 'CC'
   return name.slice(0, 2).toUpperCase()
 })
 const profileRoleLabel = computed(() => {
@@ -1191,6 +1191,7 @@ function handleLogout() {
   display: flex;
   align-items: center;
   gap: 12px;
+  width: 100%;
   min-height: 78px;
   padding: 18px 18px 14px;
   color: #111827;
@@ -1214,10 +1215,14 @@ function handleLogout() {
 }
 
 .sidebar-header .brand {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
   font-size: 19px;
   font-weight: 800;
   letter-spacing: 0;
   white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .sidebar-actions {
