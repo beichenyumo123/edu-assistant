@@ -4,8 +4,8 @@
     <aside class="sidebar">
       <!-- Logo -->
       <div class="sidebar-header" @click="handleNewChat">
-        <span class="logo">OA</span>
-        <span class="brand">OnboardAgent</span>
+        <span class="logo">CC</span>
+        <span class="brand">CorpKnow Compass</span>
       </div>
 
       <!-- 新建对话 -->
@@ -53,9 +53,9 @@
       <!-- 顶部助手栏 -->
       <header class="chat-header">
         <div class="assistant-title">
-          <span class="assistant-icon">OA</span>
+          <span class="assistant-icon">CC</span>
           <div>
-            <strong>入职培训助手</strong>
+            <strong>CorpKnow Compass</strong>
             <span>基于已选企业资料检索回答</span>
           </div>
         </div>
@@ -76,8 +76,8 @@
         <!-- 空状态：预设问题卡片 -->
         <div v-if="messages.length === 0 && !isThinking" class="welcome">
           <div class="welcome-copy">
-            <span class="welcome-kicker">Enterprise onboarding workspace</span>
-            <h2>让入职问题带着资料回答</h2>
+            <span class="welcome-kicker">Corporate Knowledge Compass</span>
+            <h2>让企业知识带着资料回答</h2>
             <p>选择员工手册、制度流程或岗位培训资料后，系统会优先检索已选范围，并把可追溯来源带回回答中。</p>
           </div>
           <div class="welcome-actions">
@@ -178,7 +178,7 @@
         </div>
         <n-input-group>
           <n-input v-model:value="inputText" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }"
-            placeholder="输入入职、制度、流程或岗位培训问题... (Enter发送，Shift+Enter换行)"
+            placeholder="输入制度、流程或岗位培训问题... (Enter发送，Shift+Enter换行)"
             :disabled="isThinking"
             @keydown="handleKeydown"
             clearable />

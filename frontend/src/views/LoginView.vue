@@ -3,13 +3,13 @@
     <div class="login-shell">
       <section class="brand-panel">
         <div class="brand-mark">
-          <div class="logo-badge">OA</div>
-          <span>OnboardAgent</span>
+          <div class="logo-badge">CC</div>
+          <span>CorpKnow Compass</span>
         </div>
         <div class="brand-copy">
-          <p class="eyebrow">Enterprise Onboarding Assistant</p>
-          <h1>让新人培训资料真正参与答疑</h1>
-          <p>上传员工手册、制度流程和岗位培训资料，生成带来源的入职问答。</p>
+          <p class="eyebrow">Corporate Knowledge Compass</p>
+          <h1>让企业知识真正参与答疑</h1>
+          <p>上传员工手册、制度流程和岗位培训资料，AI 精准定位原文回答。</p>
         </div>
         <div class="feature-grid" aria-label="产品能力">
           <div class="feature-item">
@@ -22,7 +22,7 @@
           </div>
           <div class="feature-item">
             <strong>新人培训</strong>
-            <span>入职、制度、流程一体化</span>
+            <span>制度、流程一体化</span>
           </div>
           <div class="feature-item">
             <strong>质量观测</strong>
@@ -34,9 +34,9 @@
       <div class="login-card">
         <!-- Logo & 标题 -->
         <div class="login-header">
-          <div class="mobile-logo">OA</div>
+          <div class="mobile-logo">CC</div>
           <h2>{{ activeTab === 'login' ? '欢迎回来' : '创建账号' }}</h2>
-          <p>{{ activeTab === 'login' ? '登录后继续使用企业培训资料库' : '开始建立你的入职培训助手' }}</p>
+          <p>{{ activeTab === 'login' ? '登录后继续使用企业知识库' : '开始建立你的企业知识导航' }}</p>
         </div>
 
         <!-- Tab切换：登录 / 注册 -->
