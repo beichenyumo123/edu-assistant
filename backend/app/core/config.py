@@ -56,8 +56,13 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = str(DATA_DIR / "uploads")
     ALLOWED_EXTENSIONS: set = {".pdf", ".docx", ".txt", ".md"}
 
-    # CORS
-    CORS_ORIGINS: list = ["http://localhost:5173", "http://localhost:3000"]
+    # CORS（支持逗号分隔的环境变量，如 CORS_ORIGINS="https://a.com,https://b.com"）
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        """将逗号分隔的 CORS_ORIGINS 字符串转为列表"""
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
 
     class Config:
         env_file = ".env"

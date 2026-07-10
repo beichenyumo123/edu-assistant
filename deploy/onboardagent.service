@@ -1,0 +1,46 @@
+# ============================================================
+# OnboardAgent systemd 服务
+# 安装: sudo cp deploy/onboardagent.service /etc/systemd/system/
+# 启动: sudo systemctl daemon-reload && sudo systemctl enable --now onboardagent
+# ============================================================
+
+[Unit]
+Description=OnboardAgent RAG Backend Service
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/onboardagent/backend
+EnvironmentFile=/opt/onboardagent/backend/.env
+Environment=PATH=/opt/onboardagent/backend/venv/bin:/usr/local/bin:/usr/bin:/bin
+
+# Gunicorn + Uvicorn workers（生产环境）
+# workers = 2 × CPU 核数 + 1，低配机器用 2-3 个
+ExecStart=/opt/onboardagent/backend/venv/bin/gunicorn \
+    app.main:app \
+    --workers 3 \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --bind 127.0.0.1:8000 \
+    --timeout 300 \
+    --graceful-timeout 30 \
+    --access-logfile /var/log/onboardagent/access.log \
+    --error-logfile /var/log/onboardagent/error.log \
+    --log-level info
+
+# 崩溃自动重启
+Restart=always
+RestartSec=5
+
+# 安全加固
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+# 日志
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=onboardagent
+
+[Install]
+WantedBy=multi-user.target
