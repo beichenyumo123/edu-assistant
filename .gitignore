@@ -67,6 +67,10 @@ node_modules/
 *~
 *.code-workspace
 
+# ===== Agent config (local only, not versioned) =====
+AGENTS.md
+CLAUDE.md
+
 # ===== OS =====
 .DS_Store
 Thumbs.db
